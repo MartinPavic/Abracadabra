@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+/* Dark mode driven by the `.dark` class on <html> (toggled from `useTheme`), not just system preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+}
+
