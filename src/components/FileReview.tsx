@@ -10,6 +10,7 @@ import {
 } from "../lib/api";
 import { nextUndecided } from "../lib/fileReview";
 import { classifyPatch } from "./DiffViewer";
+import { ReviewSummary } from "./ReviewSummary";
 
 const statusBadge: Record<string, string> = {
   A: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
@@ -39,7 +40,7 @@ function isTyping(target: EventTarget | null) {
 }
 
 /** One file at a time: keep it, remove it, or ask for a redo; the summary follows once all are decided. */
-export function FileReview({ run }: { run: RunRecord; onChanged: () => void }) {
+export function FileReview({ run, onChanged }: { run: RunRecord; onChanged: () => void }) {
   const [files, setFiles] = useState<FileDiff[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [marks, setMarks] = useState<Record<string, FileMark>>({});
@@ -122,7 +123,7 @@ export function FileReview({ run }: { run: RunRecord; onChanged: () => void }) {
   // Re-subscribed after every render so the handler always sees the current state.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (busy || !current || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.repeat || busy || !current || event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTyping(event.target)) return;
       const key = event.key.toLowerCase();
       if (event.key === "ArrowLeft") step(-1);
@@ -306,7 +307,13 @@ export function FileReview({ run }: { run: RunRecord; onChanged: () => void }) {
                 </div>
               </div>
             ) : (
-              <div data-testid="review-summary" className="flex-1 p-4" />
+              <ReviewSummary
+                run={run}
+                paths={paths}
+                marks={marks}
+                onJump={(path) => show(paths.indexOf(path))}
+                onChanged={onChanged}
+              />
             )}
           </div>
         </>

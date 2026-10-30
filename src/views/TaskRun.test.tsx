@@ -21,7 +21,7 @@ vi.mock("../lib/api", () => ({
     ["approved", "discarded", "handed_off", "planned", "failed", "cancelled"].includes(status),
 }));
 vi.mock("../lib/useConfig", () => ({ useConfig: vi.fn(() => ({ config: { reviewerGate: "off", ideCommand: "", gitSources: [] } })) }));
-vi.mock("../components/ApprovalActions", () => ({ ApprovalActions: () => <div data-testid="approval" /> }));
+vi.mock("../components/FileReview", () => ({ FileReview: () => <div data-testid="file-review" /> }));
 vi.mock("../components/DiffViewer", () => ({ DiffViewer: () => <div data-testid="diff" /> }));
 vi.mock("../components/PublishActions", () => ({ PublishActions: () => <div data-testid="publish" /> }));
 vi.mock("../components/RunConsole", () => ({ RunConsole: () => <div data-testid="console" /> }));
@@ -72,23 +72,25 @@ describe("TaskRun buttons per status", () => {
     expect(screen.queryByRole("button", { name: "Delete run" })).toBeNull();
   });
 
-  it("awaiting approval: shows the approval actions and the diff, no cancel", async () => {
+  it("awaiting approval: shows the file review instead of the diff, no cancel", async () => {
     await renderRun("awaiting_approval");
-    expect(screen.getByTestId("approval")).toBeTruthy();
-    expect(screen.getByTestId("diff")).toBeTruthy();
+    expect(screen.getByTestId("file-review")).toBeTruthy();
+    expect(screen.queryByTestId("diff")).toBeNull();
     expect(screen.queryByRole("button", { name: "Cancel run" })).toBeNull();
   });
 
-  it("approved: shows the publish actions", async () => {
+  it("approved: shows the publish actions and the diff, not the file review", async () => {
     await renderRun("approved");
     expect(screen.getByTestId("publish")).toBeTruthy();
+    expect(screen.getByTestId("diff")).toBeTruthy();
+    expect(screen.queryByTestId("file-review")).toBeNull();
   });
 
   it("planned: offers to run from the plan or the description", async () => {
     await renderRun("planned", { planOnly: true, workerSummary: "1. do it" } as Partial<RunRecord>);
     expect(screen.getByRole("button", { name: "Run from plan" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Run from task description" })).toBeTruthy();
-    expect(screen.queryByTestId("approval")).toBeNull();
+    expect(screen.queryByTestId("file-review")).toBeNull();
   });
 
   it("failed: shows the error and deletes only after confirmation", async () => {

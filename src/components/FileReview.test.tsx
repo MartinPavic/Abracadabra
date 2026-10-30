@@ -1,11 +1,14 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type FileDiff, getRunDiff, type RunRecord, setFileDecisions } from "../lib/api";
 import { FileReview } from "./FileReview";
 
 vi.mock("../lib/api", () => ({
   describeError: String,
+  discardRun: vi.fn(),
+  finishFileReview: vi.fn(),
   getRunDiff: vi.fn(),
+  handOffRun: vi.fn(),
   setFileDecisions: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -80,6 +83,26 @@ describe("FileReview", () => {
     expect(setFileDecisions).toHaveBeenLastCalledWith("r1", [
       { path: "c.ts", decision: "keep", note: null },
     ]);
+  });
+
+  it("a held key (repeat) does not decide", async () => {
+    await renderWith(threeFiles);
+    fireEvent.keyDown(window, { key: "y", repeat: true });
+    fireEvent.keyDown(window, { key: "Y", shiftKey: true, repeat: true });
+    expect(setFileDecisions).not.toHaveBeenCalled();
+    screen.getByText("File 1 of 3");
+
+    fireEvent.keyDown(window, { key: "y" });
+    await expectFile("b.ts", 2, 3);
+  });
+
+  it("clicking a file in the summary goes back to it", async () => {
+    await renderWith(threeFiles);
+    fireEvent.click(button("Accept all remaining"));
+    const summary = await screen.findByTestId("review-summary");
+    fireEvent.click(within(summary).getByRole("button", { name: "b.ts" }));
+    await expectFile("b.ts", 2, 3);
+    expect(screen.queryByTestId("review-summary")).toBeNull();
   });
 
   it("back returns to the previous file", async () => {

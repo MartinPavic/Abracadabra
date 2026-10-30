@@ -1,10 +1,10 @@
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ApprovalActions } from "../components/ApprovalActions";
 import { BranchConflictPrompt } from "../components/BranchConflictPrompt";
 import { CopyButton } from "../components/CopyButton";
 import { DiffViewer } from "../components/DiffViewer";
+import { FileReview } from "../components/FileReview";
 import { Markdown } from "../components/Markdown";
 import { PrLensDiagram } from "../components/PrLensDiagram";
 import { PublishActions } from "../components/PublishActions";
@@ -417,8 +417,12 @@ export function TaskRun() {
         <DiffViewer runId={run.id} live />
       )}
 
-      {(run.status === "awaiting_approval" || run.status === "approved") && (
-        <DiffViewer runId={run.id} redone={Boolean(run.previousCommitSha)} />
+      {run.status === "awaiting_approval" && !run.planOnly ? (
+        <FileReview run={run} onChanged={load} />
+      ) : (
+        (run.status === "awaiting_approval" || run.status === "approved") && (
+          <DiffViewer runId={run.id} redone={Boolean(run.previousCommitSha)} />
+        )
       )}
 
       {(run.status === "awaiting_approval" || run.status === "approved" || run.status === "handed_off") &&
@@ -429,7 +433,6 @@ export function TaskRun() {
           />
         )}
 
-      {!run.planOnly && <ApprovalActions runId={run.id} status={run.status} />}
       {(run.status === "approved" || run.status === "handed_off") && (
         <PublishActions run={run} onChanged={load} />
       )}
