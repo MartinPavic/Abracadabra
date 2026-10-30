@@ -14,6 +14,21 @@ const inputClass =
   "w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 font-mono text-sm text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
 const labelClass = "mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400";
 
+const agentPresets = [
+  {
+    id: "claude",
+    label: "Claude Code",
+    worker: String.raw`sh -c 'exec claude -p --permission-mode acceptEdits < "$1"' abracadabra {prompt_file}`,
+    readOnly: String.raw`sh -c 'exec claude -p --permission-mode plan < "$1"' abracadabra {prompt_file}`,
+  },
+  {
+    id: "codex",
+    label: "OpenAI Codex (ChatGPT)",
+    worker: String.raw`sh -c 'exec codex --ask-for-approval never exec --sandbox workspace-write - < "$1"' abracadabra {prompt_file}`,
+    readOnly: String.raw`sh -c 'exec codex --ask-for-approval never exec --sandbox read-only - < "$1"' abracadabra {prompt_file}`,
+  },
+];
+
 /** Command templates for the worker and reviewer CLIs that runs shell out to. */
 export function AgentCommandsSection({
   config,
@@ -44,6 +59,11 @@ export function AgentCommandsSection({
   const [usageRegex, setUsageRegex] = useState(config.agent.usageRegex ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedPreset = agentPresets.find(
+    (preset) => workerCmd === preset.worker && reviewerCmd === preset.readOnly &&
+      planCmd === preset.readOnly && descriptionCmd === preset.readOnly,
+  )?.id ?? "";
 
   useEffect(() => {
     hasToken(AGENT_CREDENTIAL_ID)
@@ -133,6 +153,27 @@ export function AgentCommandsSection({
           use issues and agents you trust, and keep secrets out of the environment you launch the
           app from.
         </p>
+      </div>
+      <div>
+        <label className={labelClass} htmlFor="agent-preset">Agent preset</label>
+        <select
+          id="agent-preset"
+          className={inputClass}
+          value={selectedPreset}
+          onChange={(event) => {
+            const preset = agentPresets.find((item) => item.id === event.target.value);
+            if (!preset) return;
+            setWorkerCmd(preset.worker);
+            setReviewerCmd(preset.readOnly);
+            setPlanCmd(preset.readOnly);
+            setDescriptionCmd(preset.readOnly);
+          }}
+        >
+          <option value="" disabled>Custom commands</option>
+          {agentPresets.map((preset) => (
+            <option key={preset.id} value={preset.id}>{preset.label}</option>
+          ))}
+        </select>
       </div>
       <div>
         <label className={labelClass} htmlFor="worker-cmd">
