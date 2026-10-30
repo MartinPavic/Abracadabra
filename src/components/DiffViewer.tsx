@@ -19,7 +19,7 @@ const contextClass = "text-zinc-700 dark:text-zinc-300";
  * header; inside hunks only the first character matters, so a removed line
  * "-- comment" (shown as "--- comment") is not mistaken for a header.
  */
-function classifyPatch(patch: string): { text: string; className: string }[] {
+export function classifyPatch(patch: string): { text: string; className: string }[] {
   let inHunk = false;
   const inHeader = patch.startsWith("diff --git");
   return patch
