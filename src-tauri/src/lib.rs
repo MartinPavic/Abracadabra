@@ -81,6 +81,8 @@ pub fn run() {
             commands::runs::discard_run,
             commands::runs::return_to_original_branch,
             commands::runs::redo_run,
+            commands::runs::set_file_decisions,
+            commands::runs::finish_file_review,
             commands::runs::hand_off_run,
             commands::runs::push_run,
             commands::runs::create_merge_request,

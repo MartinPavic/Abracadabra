@@ -13,6 +13,7 @@ use crate::git::inplace::{ensure_on_branch, require_clean, return_to_original, u
 use crate::git::locks::RepoLocks;
 use crate::git::repo::push_branch;
 use crate::providers::{self, MergeRequestRequest};
+use crate::run::file_review::{finish_review, MarkChange};
 use crate::run::merge_request::{draft_for_run, MergeRequestDraft};
 use crate::run::pipeline::{base_of, enter, execute_redo, execute_run, request_cancel, RunInput};
 use crate::run::{now_ms, NewRun, RunRecord, RunStatus, RunStore};
@@ -87,22 +88,46 @@ pub async fn return_to_original_branch(app: AppHandle, run_id: String) -> Result
 /// user's feedback added to the worker prompt. Returns once it has started.
 #[tauri::command]
 pub async fn redo_run(app: AppHandle, run_id: String, feedback: String) -> Result<(), AppError> {
-    let record = awaiting_run(&app, &run_id)?;
+    start_redo(&app, run_id, feedback).await
+}
+
+/// Queues a redo of a run that is awaiting approval; fails if it no longer is.
+async fn start_redo(app: &AppHandle, run_id: String, feedback: String) -> Result<(), AppError> {
+    let record = awaiting_run(app, &run_id)?;
     // Fail now, not after queueing, if the folder can't be put on the run's branch.
     if let (Some(repo), Some(branch)) = (&record.repo_path, &record.branch) {
         let _guard = app.state::<RepoLocks>().lock(repo).await;
         ensure_on_branch(repo, branch).await.map_err(AppError::git)?;
         require_clean(repo).await.map_err(AppError::git)?;
     }
-    let cfg = config::load(&app)?.resolved_for(&record.source_id, &record.project);
+    let cfg = config::load(app)?.resolved_for(&record.source_id, &record.project);
     // Moving to `queued` here, not in the task, makes a double click fail fast.
-    enter(&app, &run_id, RunStatus::Queued, None)?;
+    enter(app, &run_id, RunStatus::Queued, None)?;
 
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
         execute_redo(&app_handle, &cfg, run_id, feedback).await;
     });
     Ok(())
+}
+
+/// Stores per-file keep/remove/redo marks and notes. Needs the run awaiting
+/// approval; touches no git.
+#[tauri::command]
+pub fn set_file_decisions(app: AppHandle, run_id: String, changes: Vec<MarkChange>) -> Result<(), AppError> {
+    awaiting_run(&app, &run_id)?;
+    Ok(app.state::<RunStore>().apply_mark_changes(&run_id, changes)?)
+}
+
+/// Finishes the per-file review: removes the files marked for removal, then
+/// approves the run, or starts a redo if any file or the general note asks for
+/// one. A failed redo start leaves the run awaiting approval, so it can be retried.
+#[tauri::command]
+pub async fn finish_file_review(app: AppHandle, run_id: String, general_note: Option<String>) -> Result<(), AppError> {
+    match finish_review(&app, &run_id, general_note.as_deref()).await? {
+        Some(feedback) => start_redo(&app, run_id, feedback).await,
+        None => Ok(()),
+    }
 }
 
 /// A run whose branch is ready to publish: approved, or handed off to the user
