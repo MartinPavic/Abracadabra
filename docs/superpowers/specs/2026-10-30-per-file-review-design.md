@@ -13,6 +13,7 @@ Today a finished run is judged as a whole: Yes / No / Redo automatically / Redo 
 - Notes from "redo" files are sent to the agent in one redo. Files the user accepted are marked "keep unchanged unless needed". If the agent changes an accepted file anyway, that file returns to review. Accepted files the agent did not touch stay accepted.
 - Progress survives closing the app.
 - Keyboard: `Y`, `N`, arrow keys to go back and forward, "skip for later".
+- "Accept all remaining": one action that marks every undecided file as Yes and opens the summary.
 - A final summary lists accepted, removed, redo and undecided files and is the only place that changes git.
 
 ## Non-goals
@@ -78,7 +79,7 @@ When the redo finishes, the run is `awaiting_approval` again with a new `commit_
 
 - New component `FileReview` replaces `DiffViewer` + `ApprovalActions` on the run page while the run awaits approval (layout C from the mockup): header "File N of M" with a progress bar, file name, status letter and +/- counts, the diff, an optional note field for "redo", buttons **No, redo this**, **No, just remove**, **Yes**.
 - Deciding advances to the next undecided file; after the last decision the summary shows.
-- Back/forward arrows and "skip for later" move between files without deciding. Clicking a file in a small list lets the user jump.
+- Back/forward arrows and "skip for later" move between files without deciding. "Accept all remaining" sits next to them (and as `Shift+Y`); it sets every undecided file to Yes and goes to the summary. Clicking a file in a small list lets the user jump.
 - Summary: four groups (kept, removed, redo with notes, undecided), an optional general note field ("Anything else the agent should change?"), then actions:
   - **Finish** (disabled while any file is undecided): runs `finish_file_review`. Label reflects the outcome ("Publish..." / "Apply and redo"). The summary states that removed files are deleted from the branch on finish and cannot be brought back from the app.
   - **Discard run** (existing confirm dialog).
@@ -113,4 +114,4 @@ When the redo finishes, the run is `awaiting_approval` again with a new `commit_
 
 - Exact names, struct layout, and event wiring.
 - How the progress bar and file list look in detail.
-- Whether to add a batch "accept all remaining" shortcut (not requested).
+- Whether the progress bar and file list look exactly like the mockup.
