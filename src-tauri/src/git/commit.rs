@@ -49,6 +49,27 @@ pub async fn commit_all(work_dir: &Path, message: &str, base: &str) -> Result<()
     run_git(work_dir, &["commit", "-m", message]).await
 }
 
+/// Takes `paths` out of the run's single commit by putting each back to its
+/// `base` version (deleting it if `base` doesn't have it), then amends HEAD with
+/// the same message. Errors with "nothing left to commit" if nothing would differ
+/// from `base`; the worktree is left as is, so the caller restores the old commit.
+pub async fn remove_files_from_commit(work_dir: &Path, base: &str, paths: &[String]) -> Result<(), String> {
+    for path in paths {
+        let in_base = run_git(work_dir, &["--literal-pathspecs", "cat-file", "-e", &format!("{base}:{path}")])
+            .await
+            .is_ok();
+        if in_base {
+            run_git(work_dir, &["--literal-pathspecs", "checkout", base, "--", path]).await?;
+        } else {
+            run_git(work_dir, &["--literal-pathspecs", "rm", "-f", "--", path]).await?;
+        }
+    }
+    if !has_changes(work_dir, base).await? {
+        return Err("nothing left to commit: every changed file was removed".to_string());
+    }
+    run_git(work_dir, &["commit", "-q", "--amend", "--no-edit"]).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,6 +183,92 @@ mod tests {
         assert!(!tmp.path().join("junk.txt").exists());
         assert!(!tmp.path().join("untracked.txt").exists());
         assert_eq!(run_git_output(tmp.path(), &["rev-parse", "HEAD"]).await.unwrap().trim(), good);
+    }
+
+    /// Returns the base SHA of a fresh repo; the commit under test goes on top of it.
+    async fn base_of(dir: &Path) -> String {
+        init_repo(dir);
+        run_git_output(dir, &["rev-parse", "HEAD"]).await.unwrap().trim().to_string()
+    }
+
+    async fn commit_everything(dir: &Path) {
+        run_git(dir, &["add", "-A"]).await.unwrap();
+        run_git(dir, &["commit", "-qm", "run commit"]).await.unwrap();
+    }
+
+    async fn changed_files(dir: &Path, base: &str) -> Vec<String> {
+        let out = run_git_output(dir, &["diff", "--name-only", base, "HEAD"]).await.unwrap();
+        out.lines().map(str::to_string).collect()
+    }
+
+    async fn commits_since(dir: &Path, base: &str) -> String {
+        let out = run_git_output(dir, &["rev-list", "--count", &format!("{base}..HEAD")]).await.unwrap();
+        out.trim().to_string()
+    }
+
+    #[tokio::test]
+    async fn removes_an_added_file_and_restores_a_modified_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = base_of(tmp.path()).await;
+        std::fs::write(tmp.path().join("new.txt"), "n\n").unwrap();
+        std::fs::write(tmp.path().join("keep.txt"), "k\n").unwrap();
+        std::fs::write(tmp.path().join("a.txt"), "edited\n").unwrap();
+        commit_everything(tmp.path()).await;
+
+        remove_files_from_commit(tmp.path(), &base, &["new.txt".into(), "a.txt".into()]).await.unwrap();
+
+        assert_eq!(changed_files(tmp.path(), &base).await, vec!["keep.txt"]);
+        assert_eq!(std::fs::read_to_string(tmp.path().join("a.txt")).unwrap(), "old\n");
+        assert!(!tmp.path().join("new.txt").exists());
+        assert_eq!(commits_since(tmp.path(), &base).await, "1");
+        let log = run_git_output(tmp.path(), &["log", "-1", "--format=%B"]).await.unwrap();
+        assert_eq!(log.trim(), "run commit");
+    }
+
+    #[tokio::test]
+    async fn restores_a_deleted_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = base_of(tmp.path()).await;
+        std::fs::write(tmp.path().join("keep.txt"), "k\n").unwrap();
+        std::fs::remove_file(tmp.path().join("a.txt")).unwrap();
+        commit_everything(tmp.path()).await;
+
+        remove_files_from_commit(tmp.path(), &base, &["a.txt".into()]).await.unwrap();
+
+        assert_eq!(std::fs::read_to_string(tmp.path().join("a.txt")).unwrap(), "old\n");
+        assert_eq!(changed_files(tmp.path(), &base).await, vec!["keep.txt"]);
+        assert_eq!(commits_since(tmp.path(), &base).await, "1");
+    }
+
+    #[tokio::test]
+    async fn handles_paths_with_spaces_and_a_leading_dash() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = base_of(tmp.path()).await;
+        std::fs::write(tmp.path().join("-odd name.txt"), "o\n").unwrap();
+        std::fs::write(tmp.path().join("keep.txt"), "k\n").unwrap();
+        commit_everything(tmp.path()).await;
+
+        remove_files_from_commit(tmp.path(), &base, &["-odd name.txt".into()]).await.unwrap();
+
+        assert!(!tmp.path().join("-odd name.txt").exists());
+        assert_eq!(changed_files(tmp.path(), &base).await, vec!["keep.txt"]);
+        assert_eq!(commits_since(tmp.path(), &base).await, "1");
+    }
+
+    #[tokio::test]
+    async fn refuses_when_nothing_would_remain() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = base_of(tmp.path()).await;
+        std::fs::write(tmp.path().join("new.txt"), "n\n").unwrap();
+        std::fs::write(tmp.path().join("a.txt"), "edited\n").unwrap();
+        commit_everything(tmp.path()).await;
+
+        let err = remove_files_from_commit(tmp.path(), &base, &["new.txt".into(), "a.txt".into()])
+            .await
+            .unwrap_err();
+
+        assert!(err.starts_with("nothing left to commit"), "{err}");
+        assert_eq!(commits_since(tmp.path(), &base).await, "1");
     }
 
     #[tokio::test]
