@@ -369,7 +369,8 @@ async fn run_steps<R: Runtime>(app: &AppHandle<R>, config: &AppConfig, input: &R
         work_dir: &repo_path,
         base: &base_commit,
     };
-    work_review_commit(app, config, &ctx, input.feedback.as_deref()).await
+    work_review_commit(app, config, &ctx, input.feedback.as_deref()).await?;
+    enter(app, run_id, RunStatus::AwaitingApproval, None)
 }
 
 /// Plan-only run: the plan command's output becomes the run's summary. It runs
@@ -497,7 +498,8 @@ async fn redo_steps<R: Runtime>(
     match work_review_commit(app, config, &ctx, Some(feedback)).await {
         Ok(()) => {
             app.state::<RunStore>().set_previous_commit(run_id, good_commit.to_string())?;
-            carry_over_marks(app, run_id, work_dir, base, branch, good_commit).await
+            carry_over_marks(app, run_id, work_dir, base, branch, good_commit).await?;
+            enter(app, run_id, RunStatus::AwaitingApproval, None)
         }
         Err(err) => {
             let err = if check_cancelled(app, run_id).is_err() { CANCELLED.to_string() } else { err };
@@ -629,7 +631,8 @@ fn with_extra(feedback: Option<&str>, extra: &str) -> String {
 /// Worker, tests, reviewer and commit steps, starting from a run already in
 /// `working`. Failing tests send the worker back up to `auto_fix_attempts`
 /// times, and with the reviewer gate on `auto_redo` a "changes" verdict sends it
-/// back once. The result is always exactly one commit on top of `base`.
+/// back once. The result is always exactly one commit on top of `base`. Ends in
+/// `committing`; the caller finishes its bookkeeping and then enters `awaiting_approval`.
 async fn work_review_commit<R: Runtime>(
     app: &AppHandle<R>,
     config: &AppConfig,
@@ -708,9 +711,7 @@ async fn work_review_commit<R: Runtime>(
     let message = render_commit_message(&config.commit_template, ctx.issue_ref, ctx.title, ctx.labels, &summary);
     commit_all(ctx.work_dir, &message, ctx.base).await?;
     let commit = rev_parse(ctx.work_dir, "HEAD").await?;
-    store.set_commit_sha(run_id, commit)?;
-
-    enter(app, run_id, RunStatus::AwaitingApproval, None)
+    store.set_commit_sha(run_id, commit)
 }
 
 /// Limits and environment for agent processes: the keychain-stored credential

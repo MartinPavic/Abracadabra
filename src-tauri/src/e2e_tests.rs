@@ -458,6 +458,39 @@ async fn after_a_redo_only_changed_files_return_to_review() {
 }
 
 #[tokio::test]
+async fn a_redo_stores_its_bookkeeping_before_announcing_awaiting_approval() {
+    use std::sync::{Arc, Mutex};
+    use tauri::Listener;
+
+    let env = setup();
+    let first = reviewable(&env).await.commit_sha.unwrap();
+    mark(&env, "a.txt", Decision::Keep, None);
+
+    // (commit_sha, file_review.commit_sha, previous_commit_sha) at each announcement.
+    type Seen = (Option<String>, Option<String>, Option<String>);
+    let seen: Arc<Mutex<Vec<Seen>>> = Arc::default();
+    let (handle, log) = (env.app.handle().clone(), seen.clone());
+    env.app.listen("run://status", move |_| {
+        let run = handle.state::<RunStore>().get(RUN_ID).unwrap();
+        if run.status == RunStatus::AwaitingApproval {
+            let review = run.file_review.map(|review| review.commit_sha);
+            log.lock().unwrap().push((run.commit_sha, review, run.previous_commit_sha));
+        }
+    });
+
+    enter(env.app.handle(), RUN_ID, RunStatus::Queued, None).unwrap();
+    let worker = script(&env.scripts, "b_worker.sh", "echo 'again' >> b.txt\necho '- b.txt'");
+    execute_redo(env.app.handle(), &env.config(&worker), RUN_ID.to_string(), "again".to_string()).await;
+
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 1, "one awaiting_approval announcement for the redo: {seen:?}");
+    let (commit, review_commit, previous) = &seen[0];
+    assert_ne!(commit.as_deref(), Some(first.as_str()));
+    assert_eq!(review_commit, commit, "the review already matches the new commit");
+    assert_eq!(previous.as_deref(), Some(first.as_str()));
+}
+
+#[tokio::test]
 async fn a_plan_run_reads_the_folder_without_touching_git() {
     let env = setup();
     std::fs::write(env.work.join("README.md"), "mine\n").unwrap();
