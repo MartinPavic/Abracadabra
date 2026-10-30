@@ -178,6 +178,20 @@ export type RunStatus =
   | "failed"
   | "cancelled";
 
+/** What the reviewer decided for one changed file. */
+export type Decision = "keep" | "remove" | "redo";
+
+export interface FileMark {
+  decision: Decision | null;
+  note: string | null;
+}
+
+/** Per-file review of a run's commit, keyed by file path. */
+export interface FileReviewState {
+  commitSha: string;
+  files: Record<string, FileMark>;
+}
+
 export interface RunRecord {
   id: string;
   taskId: string;
@@ -224,6 +238,8 @@ export interface RunRecord {
   branchConflict: { branch: string; suggestion: string } | null;
   /** Why the last automatic redo failed; the run itself stays approvable. */
   redoError: string | null;
+  /** Set while the run's files are being reviewed one by one. */
+  fileReview: FileReviewState | null;
   createdAtMs: number;
   updatedAtMs: number;
 }
@@ -397,6 +413,22 @@ export async function returnToOriginalBranch(runId: string): Promise<void> {
 /** "Redo automatically": re-run the agent on the run's branch with extra feedback. */
 export async function redoRun(runId: string, feedback: string): Promise<void> {
   return invoke("redo_run", { runId, feedback });
+}
+
+/** Record per-file decisions; a null decision clears the file's mark. */
+export async function setFileDecisions(
+  runId: string,
+  changes: { path: string; decision: Decision | null; note?: string | null }[],
+): Promise<void> {
+  return invoke("set_file_decisions", {
+    runId,
+    changes: changes.map(({ path, decision, note }) => ({ path, decision, note: note ?? null })),
+  });
+}
+
+/** Finish the review: remove files marked remove, then approve, or redo if any file or the note asks for it. */
+export async function finishFileReview(runId: string, generalNote?: string): Promise<void> {
+  return invoke("finish_file_review", { runId, generalNote: generalNote ?? null });
 }
 
 /** "Redo manually": open the project folder on the run's branch and stop managing the run. */
