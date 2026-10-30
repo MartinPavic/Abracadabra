@@ -45,6 +45,7 @@ async function renderRun(status: RunStatus, extra: Partial<RunRecord> = {}) {
     fixAttempts: 0,
     usage: [],
     planOnly: false,
+    removedFiles: [],
     ...extra,
   } as unknown as RunRecord);
   render(
@@ -84,6 +85,14 @@ describe("TaskRun buttons per status", () => {
     expect(screen.getByTestId("publish")).toBeTruthy();
     expect(screen.getByTestId("diff")).toBeTruthy();
     expect(screen.queryByTestId("file-review")).toBeNull();
+    expect(screen.queryByText(/removed during review/)).toBeNull();
+  });
+
+  it("says when tests and review predate files removed during review", async () => {
+    await renderRun("approved", { removedFiles: ["a.ts", "b.ts"] } as Partial<RunRecord>);
+    screen.getByText(
+      "These files were removed during review, after the tests and code review ran: a.ts, b.ts. Run the tests again before publishing.",
+    );
   });
 
   it("planned: offers to run from the plan or the description", async () => {

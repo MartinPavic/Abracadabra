@@ -240,6 +240,8 @@ export interface RunRecord {
   redoError: string | null;
   /** Set while the run's files are being reviewed one by one. */
   fileReview: FileReviewState | null;
+  /** Files removed at Finish since the tests and reviewer last ran. */
+  removedFiles: string[];
   createdAtMs: number;
   updatedAtMs: number;
 }

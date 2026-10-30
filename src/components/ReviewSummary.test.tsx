@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   discardRun,
@@ -39,15 +40,21 @@ function renderSummary(
   marks: Record<string, FileMark>,
   { onJump = vi.fn(), onChanged = vi.fn(), runRecord = run } = {},
 ) {
-  render(
-    <ReviewSummary
-      run={runRecord}
-      paths={paths}
-      marks={marks}
-      onJump={onJump}
-      onChanged={onChanged}
-    />,
-  );
+  function WithNote() {
+    const [generalNote, setGeneralNote] = useState("");
+    return (
+      <ReviewSummary
+        run={runRecord}
+        paths={paths}
+        marks={marks}
+        generalNote={generalNote}
+        onGeneralNoteChange={setGeneralNote}
+        onJump={onJump}
+        onChanged={onChanged}
+      />
+    );
+  }
+  render(<WithNote />);
   return { onJump, onChanged };
 }
 

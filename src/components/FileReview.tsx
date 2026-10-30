@@ -11,6 +11,7 @@ import {
 import { nextUndecided } from "../lib/fileReview";
 import { classifyPatch } from "./DiffViewer";
 import { ReviewSummary } from "./ReviewSummary";
+import { RunEscapeActions } from "./RunEscapeActions";
 
 const statusBadge: Record<string, string> = {
   A: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
@@ -44,6 +45,7 @@ export function FileReview({ run, onChanged }: { run: RunRecord; onChanged: () =
   const [files, setFiles] = useState<FileDiff[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [marks, setMarks] = useState<Record<string, FileMark>>({});
+  const [generalNote, setGeneralNote] = useState("");
   // null means the summary is shown.
   const [index, setIndex] = useState<number | null>(null);
   const [note, setNote] = useState("");
@@ -64,6 +66,7 @@ export function FileReview({ run, onChanged }: { run: RunRecord; onChanged: () =
     let cancelled = false;
     const seed = run.fileReview?.commitSha === run.commitSha ? run.fileReview.files : {};
     setMarks(seed);
+    setGeneralNote("");
     setFiles(null);
     setError(null);
     getRunDiff(run.id)
@@ -148,6 +151,11 @@ export function FileReview({ run, onChanged }: { run: RunRecord; onChanged: () =
       )}
       {files?.length === 0 && (
         <p className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">No changes.</p>
+      )}
+      {(files === null || files.length === 0) && (
+        <div className="px-4 pb-3">
+          <RunEscapeActions runId={run.id} onChanged={onChanged} />
+        </div>
       )}
 
       {files && files.length > 0 && (
@@ -311,6 +319,8 @@ export function FileReview({ run, onChanged }: { run: RunRecord; onChanged: () =
                 run={run}
                 paths={paths}
                 marks={marks}
+                generalNote={generalNote}
+                onGeneralNoteChange={setGeneralNote}
                 onJump={(path) => show(paths.indexOf(path))}
                 onChanged={onChanged}
               />

@@ -367,6 +367,13 @@ export function TaskRun() {
         </div>
       )}
 
+      {run.removedFiles.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          These files were removed during review, after the tests and code review ran:{" "}
+          {run.removedFiles.join(", ")}. Run the tests again before publishing.
+        </div>
+      )}
+
       {run.testResult?.output && (
         <details className={panelClass} open={!run.testResult.passed}>
           <summary className="cursor-pointer px-4 py-2 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">

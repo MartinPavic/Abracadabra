@@ -1,14 +1,21 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { type FileDiff, getRunDiff, type RunRecord, setFileDecisions } from "../lib/api";
+import {
+  discardRun,
+  type FileDiff,
+  getRunDiff,
+  handOffRun,
+  type RunRecord,
+  setFileDecisions,
+} from "../lib/api";
 import { FileReview } from "./FileReview";
 
 vi.mock("../lib/api", () => ({
   describeError: String,
-  discardRun: vi.fn(),
+  discardRun: vi.fn().mockResolvedValue(undefined),
   finishFileReview: vi.fn(),
   getRunDiff: vi.fn(),
-  handOffRun: vi.fn(),
+  handOffRun: vi.fn().mockResolvedValue(undefined),
   setFileDecisions: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -103,6 +110,81 @@ describe("FileReview", () => {
     fireEvent.click(within(summary).getByRole("button", { name: "b.ts" }));
     await expectFile("b.ts", 2, 3);
     expect(screen.queryByTestId("review-summary")).toBeNull();
+  });
+
+  it("the general note survives a jump to a file and back", async () => {
+    await renderWith(threeFiles);
+    fireEvent.click(button("Accept all remaining"));
+    const summary = await screen.findByTestId("review-summary");
+    fireEvent.change(within(summary).getByPlaceholderText("Anything else the agent should change?"), {
+      target: { value: "add tests" },
+    });
+    button("Apply and redo");
+    fireEvent.click(within(summary).getByRole("button", { name: "b.ts" }));
+    await expectFile("b.ts", 2, 3);
+
+    fireEvent.click(button("Accept all remaining"));
+    await screen.findByTestId("review-summary");
+    expect(
+      (screen.getByPlaceholderText("Anything else the agent should change?") as HTMLTextAreaElement)
+        .value,
+    ).toBe("add tests");
+    button("Apply and redo");
+    expect(screen.queryByRole("button", { name: "Finish review" })).toBeNull();
+  });
+
+  it("the general note is cleared when the run's commit changes", async () => {
+    vi.mocked(getRunDiff).mockResolvedValue(threeFiles);
+    const { rerender } = render(<FileReview run={run} onChanged={() => {}} />);
+    await screen.findByRole("heading", { name: "a.ts" });
+    fireEvent.click(button("Accept all remaining"));
+    await screen.findByTestId("review-summary");
+    fireEvent.change(screen.getByPlaceholderText("Anything else the agent should change?"), {
+      target: { value: "add tests" },
+    });
+
+    const keptAll = {
+      commitSha: "c2",
+      files: Object.fromEntries(threeFiles.map((f) => [f.path, { decision: "keep", note: null }])),
+    };
+    rerender(
+      <FileReview
+        run={{ ...run, commitSha: "c2", fileReview: keptAll } as RunRecord}
+        onChanged={() => {}}
+      />,
+    );
+    await screen.findByTestId("review-summary");
+    await waitFor(() => button("Finish review"));
+    expect(
+      (screen.getByPlaceholderText("Anything else the agent should change?") as HTMLTextAreaElement)
+        .value,
+    ).toBe("");
+  });
+
+  it("offers discard and hand off when the diff can't be loaded", async () => {
+    vi.mocked(getRunDiff).mockRejectedValue("this run's project folder no longer exists");
+    const onChanged = vi.fn();
+    render(<FileReview run={run} onChanged={onChanged} />);
+    await screen.findByText("this run's project folder no longer exists");
+    button("Open in editor / hand off");
+
+    fireEvent.click(button("Discard run"));
+    expect(discardRun).not.toHaveBeenCalled();
+    screen.getByText(/Discard this run\? Its branch is deleted/);
+    fireEvent.click(button("Yes, discard"));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    expect(discardRun).toHaveBeenCalledWith("r1");
+  });
+
+  it("offers discard and hand off when the diff is empty", async () => {
+    vi.mocked(getRunDiff).mockResolvedValue([]);
+    const onChanged = vi.fn();
+    render(<FileReview run={run} onChanged={onChanged} />);
+    await screen.findByText("No changes.");
+    button("Discard run");
+    fireEvent.click(button("Open in editor / hand off"));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    expect(handOffRun).toHaveBeenCalledWith("r1");
   });
 
   it("back returns to the previous file", async () => {
