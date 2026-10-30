@@ -20,7 +20,7 @@ vi.mock("../lib/api", () => ({
   isFinished: (status: string) =>
     ["approved", "discarded", "handed_off", "planned", "failed", "cancelled"].includes(status),
 }));
-vi.mock("../lib/useConfig", () => ({ useConfig: vi.fn(() => ({ config: { reviewerGate: "off", ideCommand: "" } })) }));
+vi.mock("../lib/useConfig", () => ({ useConfig: vi.fn(() => ({ config: { reviewerGate: "off", ideCommand: "", gitSources: [] } })) }));
 vi.mock("../components/ApprovalActions", () => ({ ApprovalActions: () => <div data-testid="approval" /> }));
 vi.mock("../components/DiffViewer", () => ({ DiffViewer: () => <div data-testid="diff" /> }));
 vi.mock("../components/PublishActions", () => ({ PublishActions: () => <div data-testid="publish" /> }));
@@ -106,7 +106,7 @@ describe("TaskRun buttons per status", () => {
     expect(screen.queryByRole("button", { name: "Open in editor" })).toBeNull();
     cleanup();
 
-    vi.mocked(useConfig).mockReturnValue({ config: { reviewerGate: "off", ideCommand: "code {path}" } } as never);
+    vi.mocked(useConfig).mockReturnValue({ config: { reviewerGate: "off", ideCommand: "code {path}", gitSources: [] } } as never);
     await renderRun("awaiting_approval", { workDir: "/tmp/p", branch: "feat/x" } as Partial<RunRecord>);
     fireEvent.click(screen.getByRole("button", { name: "Open in editor" }));
     await waitFor(() => expect(openInIde).toHaveBeenCalledWith("r1"));

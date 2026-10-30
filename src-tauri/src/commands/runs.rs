@@ -3,7 +3,9 @@
 use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 
-use crate::agent::runner::{BufferedLine, OutputBuffer};
+use crate::agent::runner::{
+    resolve_prompt_file, run_agent, write_prompt_file, AgentCommand, AgentRole, BufferedLine, OutputBuffer,
+};
 use crate::config::{self, AppConfig};
 use crate::error::AppError;
 use crate::git::diff::{live_diff, redo_diff, run_diff, FileDiff};
@@ -260,6 +262,70 @@ pub fn delete_run(app: AppHandle, run_id: String) -> Result<(), AppError> {
 #[tauri::command]
 pub fn get_run_output(app: AppHandle, run_id: String) -> Vec<BufferedLine> {
     app.state::<OutputBuffer>().get(&run_id)
+}
+
+/// Asks the configured reviewer agent to describe a completed run as a PR Lens graph document.
+#[tauri::command]
+pub async fn generate_run_diagram(app: AppHandle, run_id: String) -> Result<String, AppError> {
+    let record = app
+        .state::<RunStore>()
+        .get(&run_id)
+        .ok_or_else(|| AppError::not_found(format!("unknown run {run_id}")))?;
+    if record.plan_only || !matches!(record.status, RunStatus::AwaitingApproval | RunStatus::Approved | RunStatus::HandedOff) {
+        return Err(AppError::conflict("a diagram is available after the run has finished"));
+    }
+    let config = config::load(&app)?.resolved_for(&record.source_id, &record.project);
+    if config.agent.reviewer_cmd.trim().is_empty() {
+        return Err(AppError::conflict("configure a reviewer command in Settings to generate a diagram"));
+    }
+    let (Some(work_dir), Some(base), Some(branch)) =
+        (record.work_dir.as_deref(), base_of(&record), record.branch.as_deref())
+    else {
+        return Err(AppError::conflict("this run has no branch to diagram"));
+    };
+    if !work_dir.is_dir() {
+        return Err(AppError::not_found("this run's project folder no longer exists"));
+    }
+
+    let files = run_diff(work_dir, base, branch).await.map_err(AppError::git)?;
+    let mut diff = String::new();
+    for file in files {
+        if diff.len() + file.patch.len() > 200_000 {
+            diff.push_str("\n(diff truncated at 200,000 bytes)\n");
+            break;
+        }
+        diff.push_str(&format!("\n--- {} ({}) ---\n{}", file.path, file.status, file.patch));
+    }
+    if diff.trim().is_empty() {
+        return Err(AppError::conflict("this run has no changes to diagram"));
+    }
+
+    let prompt = format!(
+        "Create a PR Lens graph document for this code change. Read the changed files and relevant nearby code in the repository. Follow the current graph contract described by `npx @coldtea/pr-lens-cli@latest skill references`; the document must use kind `graph`, a supported schemaVersion, and declare its lenses. Omit the `provenance` field: the app fills it in. Include the changed components and their important existing relationships, plus a data flow only when the diff supports one. Do not invent components or behavior. Return only the raw JSON document, with no markdown fence or commentary.\n\nProject: {}\nChange: {}\nBase: {}\nHead: {}\n\nDiff:\n{}",
+        record.project, record.task_title, base, branch, diff
+    );
+    let system_prompt = resolve_prompt_file(work_dir, &config.agent.reviewer_prompt_file, "reviewer.md");
+    let runtime = crate::run::pipeline::agent_runtime(&config).map_err(AppError::from)?;
+    let prompt_file = write_prompt_file(&app, &run_id, AgentRole::Diagram, &prompt).map_err(AppError::from)?;
+    let command = AgentCommand {
+        role: AgentRole::Diagram,
+        template: &config.agent.reviewer_cmd,
+        prompt_file: Some(&prompt_file),
+        system_prompt: system_prompt.as_deref(),
+        cwd: work_dir,
+        runtime: &runtime,
+    };
+    let output = run_agent(&app, &run_id, &command).await;
+    let _ = std::fs::remove_file(prompt_file);
+    let output = output.map_err(AppError::from)?;
+    if output.timed_out {
+        return Err(AppError::from("diagram generation timed out"));
+    }
+    if !output.success {
+        let detail = output.stderr.last().map(String::as_str).unwrap_or("agent exited unsuccessfully");
+        return Err(AppError::from(format!("diagram generation failed: {detail}")));
+    }
+    Ok(crate::agent::runner::tail_chars(&output.stdout.join("\n"), 300_000))
 }
 
 /// Files changed by a run (since its base commit) with per-file patches.

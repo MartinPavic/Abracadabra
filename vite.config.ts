@@ -2,12 +2,20 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 // @ts-expect-error type error without @types/node package
+import { fileURLToPath } from "node:url";
+// @ts-expect-error type error without @types/node package
 import process from "node:process";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      // PR Lens render() is browser-safe; its barrel also imports Node-only manifest hashing.
+      "node:crypto": fileURLToPath(new URL("./src/lib/prLensCryptoShim.ts", import.meta.url)),
+    },
+  },
 
   test: { environment: "jsdom" },
 

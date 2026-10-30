@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@coldtea/pr-lens-renderer':
+        specifier: ^0.4.0
+        version: 0.4.0
+      '@coldtea/pr-lens-schema':
+        specifier: ^0.9.0
+        version: 0.9.0
       '@tauri-apps/api':
         specifier: ^2.12.4
         version: 2.12.4
@@ -98,6 +104,14 @@ packages:
   '@bramus/specificity@2.4.3':
     resolution: {integrity: sha512-0GEz8qJWokkUVYQYRukmkSHIFNoBH8QTreeHrAFbvz1XFYc3Y+puhMs8PQ5x8GNugiC2l5jvDBXKLbBIByeSBw==}
     hasBin: true
+
+  '@coldtea/pr-lens-renderer@0.4.0':
+    resolution: {integrity: sha512-dmZipFClvpnuhh/4DsRFsXWT0SkE4t2HBdyFAhgGMIaG11/Us7gqlJvAe8OxZJQnMWgtP1qZ6DfUR1Dtmbr1Kg==}
+    engines: {node: '>=20.11'}
+
+  '@coldtea/pr-lens-schema@0.9.0':
+    resolution: {integrity: sha512-/xVxOu2ihv8V2DxU3QUHyqUUYYQfutUhPvl3pQKu+z0VPFHvYNvISIIXXa/4QtCBpvZkyfvIjiKdgGNESZSe5w==}
+    engines: {node: '>=20.11'}
 
   '@csstools/color-helpers@6.1.2':
     resolution: {integrity: sha512-grhRy3OKmniaAEKXMjua5z/EODX0MSqBGjunw8+j/3HQjOnahs2AGhvEOIYVUWcU6ScApbhLhVrQTX8XqrMrow==}
@@ -1343,6 +1357,9 @@ packages:
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
+
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
@@ -1378,6 +1395,14 @@ snapshots:
   '@bramus/specificity@2.4.3':
     dependencies:
       css-tree: 3.2.1
+
+  '@coldtea/pr-lens-renderer@0.4.0':
+    dependencies:
+      '@coldtea/pr-lens-schema': 0.9.0
+
+  '@coldtea/pr-lens-schema@0.9.0':
+    dependencies:
+      zod: 4.6.7
 
   '@csstools/color-helpers@6.1.2': {}
 
@@ -2647,5 +2672,7 @@ snapshots:
   xml-name-validator@5.0.0: {}
 
   xmlchars@2.2.0: {}
+
+  zod@4.6.7: {}
 
   zwitch@2.0.4: {}

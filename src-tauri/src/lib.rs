@@ -76,6 +76,7 @@ pub fn run() {
             commands::runs::get_redo_diff,
             commands::runs::get_run_diff_live,
             commands::runs::get_run_output,
+            commands::runs::generate_run_diagram,
             commands::runs::approve_run,
             commands::runs::discard_run,
             commands::runs::return_to_original_branch,

@@ -39,6 +39,7 @@ pub enum AgentRole {
     Tester,
     /// Writes the merge request description.
     Describer,
+    Diagram,
 }
 
 impl AgentRole {
@@ -48,6 +49,7 @@ impl AgentRole {
             AgentRole::Reviewer => "agent://reviewer-output",
             AgentRole::Tester => "agent://test-output",
             AgentRole::Describer => "agent://describer-output",
+            AgentRole::Diagram => "agent://diagram-output",
         }
     }
 
@@ -57,6 +59,7 @@ impl AgentRole {
             AgentRole::Reviewer => "reviewer",
             AgentRole::Tester => "tests",
             AgentRole::Describer => "describer",
+            AgentRole::Diagram => "diagram",
         }
     }
 }
@@ -252,7 +255,7 @@ pub fn write_prompt_file<R: Runtime>(
 /// Deletes a run's prompt files (they hold the issue text and the diff).
 pub fn remove_prompt_files<R: Runtime>(app: &AppHandle<R>, run_id: &str) {
     let Ok(data_dir) = app.path().app_data_dir() else { return };
-    for role in [AgentRole::Worker, AgentRole::Reviewer, AgentRole::Describer] {
+    for role in [AgentRole::Worker, AgentRole::Reviewer, AgentRole::Describer, AgentRole::Diagram] {
         let path = data_dir.join("prompts").join(format!("{run_id}-{}.md", role.label()));
         if let Err(err) = std::fs::remove_file(&path) {
             if err.kind() != std::io::ErrorKind::NotFound {

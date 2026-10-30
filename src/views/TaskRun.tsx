@@ -6,6 +6,7 @@ import { BranchConflictPrompt } from "../components/BranchConflictPrompt";
 import { CopyButton } from "../components/CopyButton";
 import { DiffViewer } from "../components/DiffViewer";
 import { Markdown } from "../components/Markdown";
+import { PrLensDiagram } from "../components/PrLensDiagram";
 import { PublishActions } from "../components/PublishActions";
 import { RunConsole } from "../components/RunConsole";
 import { agentTime, formatDuration, RunStatusPill, RunStepper, useNow } from "../components/RunStatus";
@@ -419,6 +420,14 @@ export function TaskRun() {
       {(run.status === "awaiting_approval" || run.status === "approved") && (
         <DiffViewer runId={run.id} redone={Boolean(run.previousCommitSha)} />
       )}
+
+      {(run.status === "awaiting_approval" || run.status === "approved" || run.status === "handed_off") &&
+        !run.planOnly && (
+          <PrLensDiagram
+            run={run}
+            baseUrl={config?.gitSources.find((source) => source.id === run.sourceId)?.baseUrl}
+          />
+        )}
 
       {!run.planOnly && <ApprovalActions runId={run.id} status={run.status} />}
       {(run.status === "approved" || run.status === "handed_off") && (

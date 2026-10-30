@@ -314,6 +314,11 @@ export async function getRunDiff(runId: string): Promise<FileDiff[]> {
   return invoke("get_run_diff", { runId });
 }
 
+/** Generate a PR Lens graph document with the configured reviewer agent. */
+export async function generateRunDiagram(runId: string): Promise<string> {
+  return invoke("generate_run_diagram", { runId });
+}
+
 /** What the worker has changed so far, while a run is still working. */
 export async function getLiveDiff(runId: string): Promise<FileDiff[]> {
   return invoke("get_run_diff_live", { runId });
@@ -326,7 +331,7 @@ export async function getRedoDiff(runId: string): Promise<FileDiff[]> {
 
 /** One buffered line of agent output (worker, reviewer or test run). */
 export interface RunOutputLine {
-  role: "worker" | "reviewer" | "tests";
+  role: "worker" | "reviewer" | "tests" | "diagram";
   stream: "stdout" | "stderr";
   line: string;
 }
