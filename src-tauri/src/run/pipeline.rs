@@ -1,12 +1,14 @@
 //! Drives one run through clone -> branch -> worker -> tests -> reviewer ->
 //! commit, emitting `run://status` on every transition.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_notification::NotificationExt;
 
+use super::file_review::rebase;
 use super::limiter::{ProjectGate, RunLimiter};
 use super::{now_ms, BranchConflict, RunRecord, RunStatus, RunStatusEvent, RunStore};
 use crate::agent::reviewer::{run_reviewer, split_verdict, ReviewInput, ReviewVerdict};
@@ -15,6 +17,7 @@ use crate::agent::runner::{
 };
 use crate::agent::tester::{run_tests, TestResult};
 use crate::agent::worker::{run_worker, WorkerInput};
+use crate::git::diff::{redo_diff, run_diff, FileDiff};
 use crate::config::{AppConfig, ReviewerGate};
 use crate::git::commit::{commit_all, has_changes, render_commit_message, restore_to};
 use crate::git::inplace::{
@@ -492,7 +495,10 @@ async fn redo_steps<R: Runtime>(
         base,
     };
     match work_review_commit(app, config, &ctx, Some(feedback)).await {
-        Ok(()) => app.state::<RunStore>().set_previous_commit(run_id, good_commit.to_string()),
+        Ok(()) => {
+            app.state::<RunStore>().set_previous_commit(run_id, good_commit.to_string())?;
+            carry_over_marks(app, run_id, work_dir, base, branch, good_commit).await
+        }
         Err(err) => {
             let err = if check_cancelled(app, run_id).is_err() { CANCELLED.to_string() } else { err };
             roll_back_branch(work_dir, branch, good_commit)
@@ -503,6 +509,32 @@ async fn redo_steps<R: Runtime>(
             enter(app, run_id, RunStatus::AwaitingApproval, None)
         }
     }
+}
+
+/// Keeps the user's file marks across a redo, except on files the redo changed.
+/// If the diffs can't be read the marks stay on the old commit, which counts as
+/// stale, so every file is simply reviewed again.
+async fn carry_over_marks<R: Runtime>(
+    app: &AppHandle<R>,
+    run_id: &str,
+    work_dir: &Path,
+    base: &str,
+    branch: &str,
+    good_commit: &str,
+) -> Result<(), String> {
+    let store = app.state::<RunStore>();
+    let Some(review) = store.get(run_id).and_then(|run| run.file_review) else { return Ok(()) };
+    let new_commit = store.get(run_id).and_then(|run| run.commit_sha).ok_or("the redo left no commit")?;
+    let (changed, current) =
+        match tokio::try_join!(redo_diff(work_dir, good_commit, &new_commit), run_diff(work_dir, base, branch)) {
+            Ok(diffs) => diffs,
+            Err(err) => {
+                log::warn!("run {run_id}: could not carry file marks over a redo: {err}");
+                return Ok(());
+            }
+        };
+    let paths = |files: Vec<FileDiff>| files.into_iter().map(|file| file.path).collect::<HashSet<_>>();
+    store.set_file_review(run_id, Some(rebase(review, &paths(changed), &paths(current), &new_commit)))
 }
 
 /// The commit a run was cut from (falls back to the ref for runs saved before

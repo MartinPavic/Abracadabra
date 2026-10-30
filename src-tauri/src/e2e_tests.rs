@@ -8,7 +8,9 @@ use tauri::test::{mock_builder, mock_context, noop_assets, MockRuntime};
 use tauri::Manager;
 
 use crate::config::AppConfig;
+use crate::error::AppError;
 use crate::git::inplace::undo_run;
+use crate::run::file_review::{finish_review, Decision, MarkChange};
 use crate::run::limiter::RunLimiter;
 use crate::run::pipeline::{enter, execute_redo, execute_run, request_cancel, RunInput};
 use crate::run::{NewRun, RunRecord, RunStatus, RunStore};
@@ -313,6 +315,146 @@ async fn a_redo_replaces_the_commit_with_a_new_one() {
     assert_eq!(changed.len(), 1, "only the redo's own change differs");
     assert_eq!(git(&env.work, &["rev-list", "--count", "origin/dev..HEAD"]), "1");
     assert_eq!(std::fs::read_to_string(env.work.join("agent_output.txt")).unwrap().lines().count(), 2);
+}
+
+fn multi_worker(env: &Env) -> String {
+    script(
+        &env.scripts,
+        "multi_worker.sh",
+        "echo 'a' > a.txt\necho 'b' > b.txt\necho 'more' >> README.md\necho '- a.txt'\necho '- b.txt'",
+    )
+}
+
+fn mark(env: &Env, path: &str, decision: Decision, note: Option<&str>) {
+    let change = MarkChange { path: path.to_string(), decision: Some(decision), note: note.map(str::to_string) };
+    env.store().apply_mark_changes(RUN_ID, vec![change]).unwrap();
+}
+
+/// A finished run with a.txt, b.txt and README.md changed, ready for review.
+async fn reviewable(env: &Env) -> RunRecord {
+    let record = env.run(&env.config(&multi_worker(env)), false).await;
+    assert_eq!(record.status, RunStatus::AwaitingApproval, "{:?}", record.error);
+    record
+}
+
+#[tokio::test]
+async fn finish_removes_marked_files_and_approves() {
+    let env = setup();
+    let first = reviewable(&env).await.commit_sha.unwrap();
+    mark(&env, "a.txt", Decision::Remove, None);
+    mark(&env, "b.txt", Decision::Keep, None);
+    mark(&env, "README.md", Decision::Keep, None);
+
+    let feedback = finish_review(env.app.handle(), RUN_ID, None).await.unwrap();
+
+    assert_eq!(feedback, None);
+    let record = env.store().get(RUN_ID).unwrap();
+    assert_eq!(record.status, RunStatus::Approved);
+    assert_eq!(git(&env.work, &["rev-list", "--count", "origin/dev..HEAD"]), "1");
+    let files = git(&env.work, &["ls-files"]);
+    assert!(!files.contains("a.txt") && files.contains("b.txt"), "{files}");
+    let head = git(&env.work, &["rev-parse", "HEAD"]);
+    assert_eq!(record.commit_sha.as_deref(), Some(head.as_str()));
+    assert_ne!(head, first);
+    assert_eq!(record.previous_commit_sha.as_deref(), Some(first.as_str()));
+    assert_eq!(git(&env.work, &["status", "--porcelain"]), "");
+    let review = record.file_review.unwrap();
+    assert_eq!(review.commit_sha, head);
+    assert_eq!(review.files.keys().collect::<Vec<_>>(), ["README.md", "b.txt"]);
+}
+
+#[tokio::test]
+async fn finish_returns_feedback_for_redo_marks() {
+    let env = setup();
+    reviewable(&env).await;
+    mark(&env, "a.txt", Decision::Remove, None);
+    mark(&env, "b.txt", Decision::Redo, Some("use a map"));
+    mark(&env, "README.md", Decision::Keep, None);
+
+    let feedback = finish_review(env.app.handle(), RUN_ID, Some("be careful")).await.unwrap().unwrap();
+
+    assert!(feedback.contains("be careful"), "{feedback}");
+    assert!(feedback.contains("b.txt: use a map"), "{feedback}");
+    assert!(feedback.contains("Keep these files unchanged") && feedback.contains("README.md"), "{feedback}");
+    assert!(feedback.contains("do not add them back") && feedback.contains("a.txt"), "{feedback}");
+    let record = env.store().get(RUN_ID).unwrap();
+    assert_eq!(record.status, RunStatus::AwaitingApproval);
+    assert!(!git(&env.work, &["ls-files"]).contains("a.txt"), "removals are applied before the redo");
+    let review = record.file_review.unwrap();
+    assert_eq!(review.files["b.txt"].decision, Some(Decision::Redo));
+    assert!(!review.files.contains_key("a.txt"));
+}
+
+#[tokio::test]
+async fn finish_refuses_while_a_file_is_undecided() {
+    let env = setup();
+    let commit = reviewable(&env).await.commit_sha.unwrap();
+    mark(&env, "a.txt", Decision::Remove, None);
+    mark(&env, "README.md", Decision::Keep, None);
+
+    let err = finish_review(env.app.handle(), RUN_ID, None).await.unwrap_err();
+
+    let AppError::Conflict { message } = err else { panic!("expected a conflict, got {err:?}") };
+    assert!(message.contains("b.txt") && !message.contains("a.txt"), "{message}");
+    assert_eq!(git(&env.work, &["rev-parse", "HEAD"]), commit);
+    assert_eq!(env.store().get(RUN_ID).unwrap().status, RunStatus::AwaitingApproval);
+}
+
+#[tokio::test]
+async fn finish_fails_cleanly_when_every_file_is_removed() {
+    let env = setup();
+    let commit = reviewable(&env).await.commit_sha.unwrap();
+    for path in ["a.txt", "b.txt", "README.md"] {
+        mark(&env, path, Decision::Remove, None);
+    }
+
+    let err = finish_review(env.app.handle(), RUN_ID, None).await.unwrap_err();
+
+    let AppError::Git { message } = err else { panic!("expected a git error, got {err:?}") };
+    assert!(message.contains("nothing left to commit"), "{message}");
+    assert_eq!(git(&env.work, &["rev-parse", "HEAD"]), commit);
+    assert_eq!(git(&env.work, &["status", "--porcelain"]), "");
+    let record = env.store().get(RUN_ID).unwrap();
+    assert_eq!(record.status, RunStatus::AwaitingApproval);
+    assert_eq!(record.previous_commit_sha, None);
+    assert_eq!(record.file_review.unwrap().files.len(), 3);
+    assert!(env.work.join("a.txt").exists() && env.work.join("README.md").exists());
+}
+
+#[tokio::test]
+async fn a_second_finish_is_refused_once_the_run_is_queued() {
+    let env = setup();
+    reviewable(&env).await;
+    mark(&env, "a.txt", Decision::Redo, None);
+    mark(&env, "b.txt", Decision::Keep, None);
+    mark(&env, "README.md", Decision::Keep, None);
+
+    assert!(finish_review(env.app.handle(), RUN_ID, None).await.unwrap().is_some());
+    enter(env.app.handle(), RUN_ID, RunStatus::Queued, None).unwrap();
+
+    let err = finish_review(env.app.handle(), RUN_ID, None).await.unwrap_err();
+    assert!(matches!(err, AppError::Conflict { .. }), "{err:?}");
+}
+
+#[tokio::test]
+async fn after_a_redo_only_changed_files_return_to_review() {
+    let env = setup();
+    reviewable(&env).await;
+    mark(&env, "a.txt", Decision::Keep, None);
+    mark(&env, "b.txt", Decision::Keep, None);
+    mark(&env, "README.md", Decision::Keep, None);
+
+    enter(env.app.handle(), RUN_ID, RunStatus::Queued, None).unwrap();
+    let worker = script(&env.scripts, "b_worker.sh", "echo 'again' >> b.txt\necho '- b.txt'");
+    execute_redo(env.app.handle(), &env.config(&worker), RUN_ID.to_string(), "again".to_string()).await;
+
+    let record = env.store().get(RUN_ID).unwrap();
+    assert_eq!(record.status, RunStatus::AwaitingApproval, "{:?}", record.redo_error);
+    let review = record.file_review.unwrap();
+    assert_eq!(review.commit_sha, record.commit_sha.unwrap());
+    assert_eq!(review.files["a.txt"].decision, Some(Decision::Keep));
+    assert_eq!(review.files["README.md"].decision, Some(Decision::Keep));
+    assert!(!review.files.contains_key("b.txt"));
 }
 
 #[tokio::test]

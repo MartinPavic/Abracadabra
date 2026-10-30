@@ -3,6 +3,16 @@
 use std::collections::{BTreeMap, HashSet};
 
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager, Runtime};
+
+use super::pipeline::{base_of, enter};
+use super::{RunStatus, RunStore};
+use crate::error::AppError;
+use crate::git::commit::{remove_files_from_commit, restore_to};
+use crate::git::diff::run_diff;
+use crate::git::inplace::{ensure_on_branch, require_clean};
+use crate::git::locks::RepoLocks;
+use crate::git::rev_parse;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -111,6 +121,71 @@ pub fn build_feedback(general_note: Option<&str>, review: &FileReview) -> Option
         ));
     }
     Some(sections.join("\n\n"))
+}
+
+/// Applies the user's decisions: removes the files marked `Remove` from the run's
+/// commit, then either approves the run (`None`) or returns the feedback for a
+/// redo (`Some`), leaving the run awaiting approval. Safe to call again after a failure.
+pub async fn finish_review<R: Runtime>(
+    app: &AppHandle<R>,
+    run_id: &str,
+    general_note: Option<&str>,
+) -> Result<Option<String>, AppError> {
+    let store = app.state::<RunStore>();
+    let record = store.get(run_id).ok_or_else(|| AppError::not_found(format!("unknown run {run_id}")))?;
+    if record.status != RunStatus::AwaitingApproval {
+        return Err(AppError::conflict(format!("run is {:?}, not awaiting approval", record.status)));
+    }
+    let (Some(work_dir), Some(base), Some(branch), Some(commit)) =
+        (record.work_dir.as_deref(), base_of(&record), record.branch.as_deref(), record.commit_sha.as_deref())
+    else {
+        return Err(AppError::conflict("this run has no commit to review"));
+    };
+
+    let _guard = app.state::<RepoLocks>().lock(work_dir).await;
+    let paths: Vec<String> =
+        run_diff(work_dir, base, branch).await.map_err(AppError::git)?.into_iter().map(|file| file.path).collect();
+    // Marks made on an earlier commit can't be trusted: they count as undecided.
+    let current = record.file_review.as_ref().filter(|review| review.commit_sha == commit);
+    let missing = undecided(&paths, current);
+    if !missing.is_empty() {
+        return Err(AppError::conflict(format!("decide on these files first: {}", missing.join(", "))));
+    }
+    let mut review =
+        current.cloned().unwrap_or_else(|| FileReview { commit_sha: commit.to_string(), files: BTreeMap::new() });
+    review.files.retain(|path, _| paths.contains(path));
+
+    let feedback = build_feedback(general_note, &review);
+    let removals: Vec<String> = review
+        .files
+        .iter()
+        .filter(|(_, mark)| mark.decision == Some(Decision::Remove))
+        .map(|(path, _)| path.clone())
+        .collect();
+
+    if !removals.is_empty() {
+        ensure_on_branch(work_dir, branch).await.map_err(AppError::git)?;
+        require_clean(work_dir).await.map_err(AppError::git)?;
+        if let Err(err) = remove_files_from_commit(work_dir, base, &removals).await {
+            let err = match restore_to(work_dir, commit).await {
+                Ok(()) => err,
+                Err(restore_err) => format!("{err} (and restoring the earlier commit failed: {restore_err})"),
+            };
+            return Err(AppError::git(err));
+        }
+        let new_commit = rev_parse(work_dir, "HEAD").await.map_err(AppError::git)?;
+        store.set_previous_commit(run_id, commit.to_string())?;
+        store.set_commit_sha(run_id, new_commit.clone())?;
+        review.files.retain(|_, mark| mark.decision != Some(Decision::Remove));
+        review.commit_sha = new_commit;
+        store.set_file_review(run_id, Some(review))?;
+    }
+
+    if feedback.is_some() {
+        return Ok(feedback);
+    }
+    enter(app, run_id, RunStatus::Approved, None)?;
+    Ok(None)
 }
 
 #[cfg(test)]
