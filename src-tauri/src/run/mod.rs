@@ -11,7 +11,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 
 use crate::agent::tester::TestResult;
+use file_review::{FileMark, FileReview, MarkChange};
 
+pub mod file_review;
 pub mod limiter;
 pub mod merge_request;
 pub mod pipeline;
@@ -173,6 +175,9 @@ pub struct RunRecord {
     /// The commit a successful redo replaced, to show what the redo changed.
     #[serde(default)]
     pub previous_commit_sha: Option<String>,
+    /// The user's per-file decisions on the current commit.
+    #[serde(default)]
+    pub file_review: Option<FileReview>,
     pub project: String,
     pub status: RunStatus,
     pub history: Vec<StatusTransition>,
@@ -459,6 +464,7 @@ impl RunStore {
             base_commit: None,
             commit_sha: None,
             previous_commit_sha: None,
+            file_review: None,
             project: new.project.to_string(),
             status: RunStatus::Queued,
             history: vec![StatusTransition { status: RunStatus::Queued, at_ms: now }],
@@ -637,6 +643,34 @@ impl RunStore {
     pub fn set_redo_error(&self, run_id: &str, error: Option<String>) -> Result<(), String> {
         self.update(run_id, |record| {
             record.redo_error = error;
+            Ok(())
+        })
+    }
+
+    /// Applies per-file mark changes. A change with no decision and no note
+    /// removes the file's entry.
+    pub fn apply_mark_changes(&self, run_id: &str, changes: Vec<MarkChange>) -> Result<(), String> {
+        self.update(run_id, |record| {
+            if record.file_review.is_none() {
+                let commit_sha = record.commit_sha.clone().ok_or("run has no commit to review")?;
+                record.file_review = Some(FileReview { commit_sha, files: Default::default() });
+            }
+            let review = record.file_review.as_mut().expect("created above");
+            for change in changes {
+                let blank_note = change.note.as_deref().is_none_or(|note| note.trim().is_empty());
+                if change.decision.is_none() && blank_note {
+                    review.files.remove(&change.path);
+                } else {
+                    review.files.insert(change.path, FileMark { decision: change.decision, note: change.note });
+                }
+            }
+            Ok(())
+        })
+    }
+
+    pub fn set_file_review(&self, run_id: &str, review: Option<FileReview>) -> Result<(), String> {
+        self.update(run_id, |record| {
+            record.file_review = review;
             Ok(())
         })
     }
