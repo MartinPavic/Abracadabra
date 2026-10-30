@@ -132,17 +132,21 @@ pub async fn finish_review<R: Runtime>(
     general_note: Option<&str>,
 ) -> Result<Option<String>, AppError> {
     let store = app.state::<RunStore>();
-    let record = store.get(run_id).ok_or_else(|| AppError::not_found(format!("unknown run {run_id}")))?;
+    let get = || store.get(run_id).ok_or_else(|| AppError::not_found(format!("unknown run {run_id}")));
+    let no_commit = || AppError::conflict("this run has no commit to review");
+    let lock_dir = get()?.work_dir.ok_or_else(no_commit)?;
+    let _guard = app.state::<RepoLocks>().lock(&lock_dir).await;
+    // Read only now: a redo may have started while Finish waited for the lock.
+    let record = get()?;
     if record.status != RunStatus::AwaitingApproval {
         return Err(AppError::conflict(format!("run is {:?}, not awaiting approval", record.status)));
     }
     let (Some(work_dir), Some(base), Some(branch), Some(commit)) =
         (record.work_dir.as_deref(), base_of(&record), record.branch.as_deref(), record.commit_sha.as_deref())
     else {
-        return Err(AppError::conflict("this run has no commit to review"));
+        return Err(no_commit());
     };
 
-    let _guard = app.state::<RepoLocks>().lock(work_dir).await;
     let paths: Vec<String> =
         run_diff(work_dir, base, branch).await.map_err(AppError::git)?.into_iter().map(|file| file.path).collect();
     // Marks made on an earlier commit can't be trusted: they count as undecided.
@@ -166,6 +170,12 @@ pub async fn finish_review<R: Runtime>(
     if !removals.is_empty() {
         ensure_on_branch(work_dir, branch).await.map_err(AppError::git)?;
         require_clean(work_dir).await.map_err(AppError::git)?;
+        if rev_parse(work_dir, "HEAD").await.map_err(AppError::git)? != commit {
+            return Err(AppError::conflict(format!(
+                "{branch} has commits on top of the run's commit that the app didn't make; move them off \
+                 the branch or hand the run off before finishing the review"
+            )));
+        }
         if let Err(err) = remove_files_from_commit(work_dir, base, &removals).await {
             let err = match restore_to(work_dir, commit).await {
                 Ok(()) => err,
@@ -179,6 +189,13 @@ pub async fn finish_review<R: Runtime>(
         review.files.retain(|_, mark| mark.decision != Some(Decision::Remove));
         review.commit_sha = new_commit;
         store.set_file_review(run_id, Some(review))?;
+        let mut removed = record.removed_files.clone();
+        for path in removals {
+            if !removed.contains(&path) {
+                removed.push(path);
+            }
+        }
+        store.set_removed_files(run_id, removed)?;
     }
 
     if feedback.is_some() {
@@ -327,5 +344,27 @@ mod tests {
         store.set_file_review("r1", None).unwrap();
         assert!(store.get("r1").unwrap().file_review.is_none());
         assert!(store.apply_mark_changes("nope", vec![]).is_err());
+    }
+
+    #[test]
+    fn marks_on_top_of_a_review_for_an_older_commit_replace_it() {
+        use crate::run::RunStore;
+
+        let store = RunStore::default();
+        store.create("r1");
+        store.set_commit_sha("r1", "new".into()).unwrap();
+        let stale = review(&[
+            ("a", mark(Some(Decision::Keep), None)),
+            ("b", mark(Some(Decision::Redo), Some("x"))),
+        ]);
+        store.set_file_review("r1", Some(stale)).unwrap();
+
+        let change = MarkChange { path: "c".into(), decision: Some(Decision::Remove), note: None };
+        store.apply_mark_changes("r1", vec![change]).unwrap();
+
+        let stored = store.get("r1").unwrap().file_review.unwrap();
+        assert_eq!(stored.commit_sha, "new");
+        assert_eq!(stored.files.keys().collect::<Vec<_>>(), ["c"]);
+        assert_eq!(undecided(&["c".to_string()], Some(&stored)), Vec::<String>::new());
     }
 }

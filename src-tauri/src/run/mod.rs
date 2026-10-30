@@ -178,6 +178,9 @@ pub struct RunRecord {
     /// The user's per-file decisions on the current commit.
     #[serde(default)]
     pub file_review: Option<FileReview>,
+    /// Files removed at Finish since the tests and reviewer last ran.
+    #[serde(default)]
+    pub removed_files: Vec<String>,
     pub project: String,
     pub status: RunStatus,
     pub history: Vec<StatusTransition>,
@@ -465,6 +468,7 @@ impl RunStore {
             commit_sha: None,
             previous_commit_sha: None,
             file_review: None,
+            removed_files: Vec::new(),
             project: new.project.to_string(),
             status: RunStatus::Queued,
             history: vec![StatusTransition { status: RunStatus::Queued, at_ms: now }],
@@ -648,11 +652,11 @@ impl RunStore {
     }
 
     /// Applies per-file mark changes. A change with no decision and no note
-    /// removes the file's entry.
+    /// removes the file's entry. Marks saved for another commit are replaced.
     pub fn apply_mark_changes(&self, run_id: &str, changes: Vec<MarkChange>) -> Result<(), String> {
         self.update(run_id, |record| {
-            if record.file_review.is_none() {
-                let commit_sha = record.commit_sha.clone().ok_or("run has no commit to review")?;
+            let commit_sha = record.commit_sha.clone().ok_or("run has no commit to review")?;
+            if record.file_review.as_ref().is_none_or(|review| review.commit_sha != commit_sha) {
                 record.file_review = Some(FileReview { commit_sha, files: Default::default() });
             }
             let review = record.file_review.as_mut().expect("created above");
@@ -671,6 +675,13 @@ impl RunStore {
     pub fn set_file_review(&self, run_id: &str, review: Option<FileReview>) -> Result<(), String> {
         self.update(run_id, |record| {
             record.file_review = review;
+            Ok(())
+        })
+    }
+
+    pub fn set_removed_files(&self, run_id: &str, paths: Vec<String>) -> Result<(), String> {
+        self.update(run_id, |record| {
+            record.removed_files = paths;
             Ok(())
         })
     }

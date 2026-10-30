@@ -514,8 +514,8 @@ async fn redo_steps<R: Runtime>(
 }
 
 /// Keeps the user's file marks across a redo, except on files the redo changed.
-/// If the diffs can't be read the marks stay on the old commit, which counts as
-/// stale, so every file is simply reviewed again.
+/// If the diffs can't be read the marks stay on the old commit, so the UI shows
+/// every file as undecided and the first new decision starts a fresh review.
 async fn carry_over_marks<R: Runtime>(
     app: &AppHandle<R>,
     run_id: &str,
@@ -706,6 +706,8 @@ async fn work_review_commit<R: Runtime>(
     }
     store.set_review_notes(run_id, notes)?;
     store.set_review_verdict(run_id, verdict.map(ReviewVerdict::as_str))?;
+    // Tests and review just ran on the current files.
+    store.set_removed_files(run_id, Vec::new())?;
 
     enter(app, run_id, RunStatus::Committing, None)?;
     let message = render_commit_message(&config.commit_template, ctx.issue_ref, ctx.title, ctx.labels, &summary);

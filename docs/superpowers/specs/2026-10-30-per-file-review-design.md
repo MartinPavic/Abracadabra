@@ -74,6 +74,7 @@ When the redo finishes, the run is `awaiting_approval` again with a new `commit_
 - A file that did not change keeps its decision. "Redo" files the agent did not change also return to review (their note is kept as the default text).
 - A file removed earlier does not appear in the diff; if the agent adds it back it is new and goes to review.
 - Files that no longer appear in the diff against the base at all drop out of the review.
+- Accepted deviation: after a failed or never-started redo the review is not rebased (Redo marks keep their decision, so the user can retry with the notes intact); `rebase` runs only after a successful redo.
 
 ### UI
 

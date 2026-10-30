@@ -10,6 +10,7 @@ use tauri::Manager;
 use crate::config::AppConfig;
 use crate::error::AppError;
 use crate::git::inplace::undo_run;
+use crate::git::locks::RepoLocks;
 use crate::run::file_review::{finish_review, Decision, MarkChange};
 use crate::run::limiter::RunLimiter;
 use crate::run::pipeline::{enter, execute_redo, execute_run, request_cancel, RunInput};
@@ -434,6 +435,94 @@ async fn a_second_finish_is_refused_once_the_run_is_queued() {
 
     let err = finish_review(env.app.handle(), RUN_ID, None).await.unwrap_err();
     assert!(matches!(err, AppError::Conflict { .. }), "{err:?}");
+}
+
+#[tokio::test]
+async fn finish_notes_removed_files_until_a_redo_reruns_tests_and_review() {
+    let env = setup();
+    reviewable(&env).await;
+    mark(&env, "a.txt", Decision::Remove, None);
+    mark(&env, "b.txt", Decision::Redo, Some("use a map"));
+    mark(&env, "README.md", Decision::Keep, None);
+
+    let feedback = finish_review(env.app.handle(), RUN_ID, None).await.unwrap().unwrap();
+    assert_eq!(env.store().get(RUN_ID).unwrap().removed_files, ["a.txt"]);
+
+    enter(env.app.handle(), RUN_ID, RunStatus::Queued, None).unwrap();
+    let worker = script(&env.scripts, "b_worker.sh", "echo 'again' >> b.txt\necho '- b.txt'");
+    execute_redo(env.app.handle(), &env.config(&worker), RUN_ID.to_string(), feedback).await;
+
+    let record = env.store().get(RUN_ID).unwrap();
+    assert_eq!(record.status, RunStatus::AwaitingApproval, "{:?}", record.redo_error);
+    assert!(record.removed_files.is_empty(), "{:?}", record.removed_files);
+}
+
+#[tokio::test]
+async fn removed_files_survive_a_failed_redo_and_add_up() {
+    let env = setup();
+    reviewable(&env).await;
+    mark(&env, "a.txt", Decision::Remove, None);
+    mark(&env, "b.txt", Decision::Redo, None);
+    mark(&env, "README.md", Decision::Keep, None);
+    let feedback = finish_review(env.app.handle(), RUN_ID, None).await.unwrap().unwrap();
+
+    enter(env.app.handle(), RUN_ID, RunStatus::Queued, None).unwrap();
+    execute_redo(env.app.handle(), &env.config("sh -c \"exit 3\""), RUN_ID.to_string(), feedback).await;
+    let record = env.store().get(RUN_ID).unwrap();
+    assert!(record.redo_error.is_some());
+    assert_eq!(record.removed_files, ["a.txt"], "tests and review still predate the removal");
+
+    mark(&env, "b.txt", Decision::Remove, None);
+    assert_eq!(finish_review(env.app.handle(), RUN_ID, None).await.unwrap(), None);
+    assert_eq!(env.store().get(RUN_ID).unwrap().removed_files, ["a.txt", "b.txt"]);
+}
+
+#[tokio::test]
+async fn finish_rechecks_the_status_once_it_holds_the_lock() {
+    use std::time::Duration;
+
+    let env = setup();
+    let record = reviewable(&env).await;
+    let commit = record.commit_sha.clone().unwrap();
+    mark(&env, "a.txt", Decision::Remove, None);
+    mark(&env, "b.txt", Decision::Keep, None);
+    mark(&env, "README.md", Decision::Keep, None);
+
+    let guard = env.app.state::<RepoLocks>().lock(record.work_dir.as_deref().unwrap()).await;
+    let mut finish = std::pin::pin!(finish_review(env.app.handle(), RUN_ID, None));
+    assert!(tokio::time::timeout(Duration::from_millis(20), &mut finish).await.is_err(), "waits for the lock");
+    // A redo started while Finish was waiting.
+    enter(env.app.handle(), RUN_ID, RunStatus::Queued, None).unwrap();
+    drop(guard);
+
+    let err = finish.await.unwrap_err();
+    assert!(matches!(err, AppError::Conflict { .. }), "{err:?}");
+    assert_eq!(git(&env.work, &["rev-parse", "HEAD"]), commit);
+    assert!(git(&env.work, &["ls-files"]).contains("a.txt"));
+    assert_eq!(env.store().get(RUN_ID).unwrap().status, RunStatus::Queued);
+}
+
+#[tokio::test]
+async fn finish_refuses_to_amend_a_commit_the_user_made_on_the_run_branch() {
+    let env = setup();
+    let run_commit = reviewable(&env).await.commit_sha.unwrap();
+    std::fs::write(env.work.join("b.txt"), "mine\n").unwrap();
+    git(&env.work, &["commit", "-q", "-am", "my own change"]);
+    let mine = git(&env.work, &["rev-parse", "HEAD"]);
+    mark(&env, "a.txt", Decision::Remove, None);
+    mark(&env, "b.txt", Decision::Keep, None);
+    mark(&env, "README.md", Decision::Keep, None);
+
+    let err = finish_review(env.app.handle(), RUN_ID, None).await.unwrap_err();
+
+    let AppError::Conflict { message } = err else { panic!("expected a conflict, got {err:?}") };
+    assert!(message.contains("feat/1-add-thing"), "{message}");
+    assert_eq!(git(&env.work, &["rev-parse", "HEAD"]), mine);
+    assert_eq!(git(&env.work, &["rev-parse", "HEAD~1"]), run_commit);
+    assert_eq!(git(&env.work, &["status", "--porcelain"]), "");
+    let record = env.store().get(RUN_ID).unwrap();
+    assert_eq!(record.status, RunStatus::AwaitingApproval);
+    assert!(record.removed_files.is_empty());
 }
 
 #[tokio::test]
