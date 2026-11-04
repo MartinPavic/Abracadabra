@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppConfig } from "../lib/api";
+import { agentPresets } from "../lib/agentPresets";
 import { AgentCommandsSection } from "./AgentCommandsSection";
 
 vi.mock("../lib/api", () => ({
@@ -44,6 +45,34 @@ describe("AgentCommandsSection presets", () => {
       expect(saved.testCmd).toBe("pnpm test");
     },
   );
+
+  it("saving agent commands stores the inferred preset", async () => {
+    const preset = agentPresets[0];
+    const onChange = vi.fn().mockResolvedValue(undefined);
+    const presetConfig = {
+      ...config,
+      agent: {
+        ...config.agent,
+        workerCmd: preset.worker,
+        reviewerCmd: preset.readOnly,
+        planCmd: preset.readOnly,
+        descriptionCmd: preset.readOnly,
+      },
+    } as AppConfig;
+    render(<AgentCommandsSection config={presetConfig} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Credential environment variable"), {
+      target: { value: "OTHER_TOKEN" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save commands" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalledOnce());
+    expect((onChange.mock.calls[0][0] as AppConfig).agent.preset).toBe(preset.id);
+
+    onChange.mockClear();
+    fireEvent.change(screen.getByLabelText("Worker command"), { target: { value: "my-agent" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save commands" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalledOnce());
+    expect((onChange.mock.calls[0][0] as AppConfig).agent.preset).toBe("");
+  });
 
   it("returns to custom when a preset command is edited", () => {
     render(<AgentCommandsSection config={config} onChange={vi.fn()} />);

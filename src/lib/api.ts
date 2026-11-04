@@ -35,6 +35,8 @@ export interface AgentConfig {
   planCmd: string;
   /** Command that writes the MR summary and reviewer checklist; empty uses the worker summary. */
   descriptionCmd: string;
+  /** "claude", "codex" or empty for a custom setup. */
+  preset: string;
   /** Env var the agent CLI reads its credential from; the secret is in the OS keychain. */
   credentialEnvVar: string;
   /** Longest an agent or test process may run, in seconds; 0 means no limit. */
@@ -106,6 +108,43 @@ export async function hasToken(sourceId: string): Promise<boolean> {
 
 export async function removeToken(sourceId: string): Promise<void> {
   return invoke("remove_token", { sourceId });
+}
+
+export type InstructionScope =
+  | { kind: "global" }
+  | { kind: "project"; sourceId: string; projectPath: string };
+
+export async function getInstructions(scope: InstructionScope): Promise<string> {
+  return invoke("get_instructions", { scope });
+}
+
+export async function setInstructions(scope: InstructionScope, text: string): Promise<void> {
+  return invoke("set_instructions", { scope, text });
+}
+
+export async function readTextFile(path: string): Promise<string> {
+  return invoke("read_text_file", { path });
+}
+
+export interface DetectedAgent {
+  id: string;
+  path: string;
+}
+
+export async function detectAgentClis(): Promise<DetectedAgent[]> {
+  return invoke("detect_agent_clis");
+}
+
+export interface ReadyItem {
+  id: string;
+  ok: boolean;
+  message: string;
+  /** What the failed check stops: starting runs or only plan runs. */
+  blocks: "run" | "plan";
+}
+
+export async function checkReady(sourceId: string): Promise<ReadyItem[]> {
+  return invoke("check_ready", { sourceId });
 }
 
 /** Mirrors the Rust `AppError`, which most run, provider and stash commands fail with. */
