@@ -32,11 +32,15 @@ pub fn managed_repo_dir<R: Runtime>(
 }
 
 fn project_dir_name(project_path: &str) -> String {
-    // FNV-1a: stable across restarts and Rust versions, unlike `DefaultHasher`.
-    let hash = project_path
+    format!("{}-{:08x}", slugify_project_path(project_path), stable_hash(project_path))
+}
+
+/// FNV-1a: stable across restarts and Rust versions, unlike `DefaultHasher`.
+pub(crate) fn stable_hash(text: &str) -> u32 {
+    let hash = text
         .bytes()
         .fold(0xcbf29ce484222325u64, |hash, byte| (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3));
-    format!("{}-{:08x}", slugify_project_path(project_path), hash as u32)
+    hash as u32
 }
 
 /// Turns a project path like "group/subgroup/project" into a filesystem-safe

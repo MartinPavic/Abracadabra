@@ -5,6 +5,7 @@ mod error;
 #[cfg(test)]
 mod e2e_tests;
 mod git;
+pub mod instructions;
 mod migrate;
 mod providers;
 mod run;
