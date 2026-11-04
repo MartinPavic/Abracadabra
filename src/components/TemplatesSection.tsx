@@ -13,7 +13,6 @@ export function TemplatesSection({
   config: AppConfig;
   onChange: (next: AppConfig) => Promise<void>;
 }) {
-  const [baseBranch, setBaseBranch] = useState(config.baseBranch ?? "");
   const [branch, setBranch] = useState(config.branchTemplate);
   const [commit, setCommit] = useState(config.commitTemplate);
   const [mergeRequest, setMergeRequest] = useState(config.mergeRequestTemplate ?? "");
@@ -23,7 +22,6 @@ export function TemplatesSection({
   const [error, setError] = useState<string | null>(null);
 
   const dirty =
-    baseBranch !== (config.baseBranch ?? "") ||
     branch !== config.branchTemplate ||
     commit !== config.commitTemplate ||
     commentMrLink !== (config.commentMrLink ?? false) ||
@@ -36,7 +34,6 @@ export function TemplatesSection({
     try {
       await onChange({
         ...config,
-        baseBranch: baseBranch.trim(),
         branchTemplate: branch,
         commitTemplate: commit,
         mergeRequestTemplate: mergeRequest,
@@ -67,23 +64,6 @@ export function TemplatesSection({
           <code>{"{issue_link}"}</code> (link to the ticket), <code>{"{worker_summary}"}</code> (all
           of the worker&apos;s text), <code>{"{files_changed}"}</code>,{" "}
           <code>{"{review_notes}"}</code>, <code>{"{issue_ref}"}</code>.
-        </p>
-      </div>
-      <div>
-        <label className={labelClass} htmlFor="base-branch">
-          Base branch
-        </label>
-        <input
-          id="base-branch"
-          className={inputClass}
-          placeholder="dev"
-          value={baseBranch}
-          onChange={(e) => setBaseBranch(e.target.value)}
-        />
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Runs branch off <code>origin/&lt;this&gt;</code> and merge requests target it. A project
-          that doesn&apos;t have it uses its own default branch. Can be overridden per source or
-          project. Blank always uses each project&apos;s default branch.
         </p>
       </div>
       <div>

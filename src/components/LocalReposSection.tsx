@@ -51,8 +51,12 @@ export function LocalReposSection({
     <section className="flex flex-col gap-3">
       <div>
         <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          Local project folders
+          Project checkouts
         </h2>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Without an entry the app works in its own clone of the project; add an entry to run in
+          your own checkout instead.
+        </p>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           Where each project's work gets done. A run stashes your uncommitted changes, works on a new
           branch in this folder and leaves it on that branch for review; projects without a folder
