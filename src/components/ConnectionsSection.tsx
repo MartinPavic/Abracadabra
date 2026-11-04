@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { AppConfig, GitSourceConfig } from "../lib/api";
-import { removeToken, setToken } from "../lib/api";
+import { removeToken } from "../lib/api";
+import { addGitSource } from "../lib/gitSources";
 import { clearCachedTasks } from "../lib/taskCache";
 import { GitSourceForm, type GitSourceFormValues } from "./GitSourceForm";
 import { OverridesEditor } from "./OverridesEditor";
@@ -18,22 +19,7 @@ export function ConnectionsSection({
 
   /** Throws on failure, so the form can show why the source wasn't added. */
   async function handleAdd(values: GitSourceFormValues) {
-    const source: GitSourceConfig = {
-      id: crypto.randomUUID(),
-      name: values.name.trim(),
-      provider: values.provider,
-      baseUrl: values.baseUrl.trim(),
-      projectFilter: values.projectFilter.trim() || null,
-    };
-
-    await setToken(source.id, values.token);
-    try {
-      await onChange({ ...config, gitSources: [...config.gitSources, source] });
-    } catch (err) {
-      // Don't leave a token in the keychain for a source that was never saved.
-      await removeToken(source.id).catch(() => undefined);
-      throw err;
-    }
+    await addGitSource(config, onChange, values);
   }
 
   async function handleRemove(source: GitSourceConfig) {
