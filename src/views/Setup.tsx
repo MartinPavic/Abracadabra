@@ -1,18 +1,16 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { AgentSection } from "../components/AgentSection";
 import { SETUP_SKIPPED_KEY } from "../components/FirstRunGate";
 import {
-  type AgentTestResult,
   type AppConfig,
-  type DetectedAgent,
   describeError,
   detectAgentClis,
   type GitProvider,
   type GitSourceConfig,
-  testAgentCommand,
   testConnection,
 } from "../lib/api";
-import { agentPresets, applyPreset, type PresetId } from "../lib/agentPresets";
+import { agentPresets } from "../lib/agentPresets";
 import { addGitSource } from "../lib/gitSources";
 import { useConfig } from "../lib/useConfig";
 
@@ -53,12 +51,6 @@ const secondaryButtonClass =
   "rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900";
 const primaryButtonClass =
   "rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300";
-const cardClass = (selected: boolean) =>
-  `flex flex-col gap-0.5 rounded-md border px-3 py-2 text-left text-sm ${
-    selected
-      ? "border-zinc-900 bg-zinc-100 dark:border-zinc-100 dark:bg-zinc-900"
-      : "border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
-  }`;
 
 function hostOf(url: string): string | undefined {
   try {
@@ -335,132 +327,33 @@ function AgentStep({
   onBack: () => void;
   onContinue: () => void;
 }) {
-  const [detected, setDetected] = useState<DetectedAgent[] | null>(null);
-  const [choosing, setChoosing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<AgentTestResult | null>(null);
-  const [testError, setTestError] = useState<string | null>(null);
+  const [noneDetected, setNoneDetected] = useState(false);
 
   useEffect(() => {
     let active = true;
     detectAgentClis()
-      .then((found) => active && setDetected(found))
-      .catch(() => active && setDetected([]));
+      .then((found) => active && setNoneDetected(found.length === 0))
+      .catch(() => active && setNoneDetected(true));
     return () => {
       active = false;
     };
   }, []);
 
-  const agent = config.agent;
-  const cards = (detected ?? []).flatMap((found) => {
-    const preset = agentPresets.find((item) => item.id === found.id);
-    return preset ? [{ preset, path: found.path }] : [];
-  });
-  const configured = agent.workerCmd.trim() !== "";
-  const canContinue = detected !== null && !choosing && (configured || cards.length === 0);
-
-  async function choose(id: PresetId) {
-    if (id === agent.preset) return;
-    setChoosing(true);
-    setError(null);
-    setTestResult(null);
-    setTestError(null);
-    try {
-      await onChange({ ...config, agent: applyPreset(agent, id) });
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setChoosing(false);
-    }
-  }
-
-  async function handleTest() {
-    setTesting(true);
-    setTestResult(null);
-    setTestError(null);
-    try {
-      setTestResult(await testAgentCommand(agent.workerCmd));
-    } catch (err) {
-      setTestError(describeError(err));
-    } finally {
-      setTesting(false);
-    }
-  }
-
   return (
     <div className="flex flex-col gap-4">
-      {detected === null && (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Looking for agent CLIs...</p>
-      )}
-      {detected !== null && cards.length === 0 && (
-        <div className="flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300">
-          <p>No supported agent CLI was found on your PATH.</p>
-          <Link
-            to="/settings"
-            className="text-zinc-600 underline hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-          >
-            Use custom commands in Settings
-          </Link>
-        </div>
-      )}
-      {cards.length > 0 && (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {cards.map(({ preset, path }) => (
-            <button
-              key={preset.id}
-              type="button"
-              aria-pressed={agent.preset === preset.id}
-              disabled={choosing}
-              className={cardClass(agent.preset === preset.id)}
-              onClick={() => void choose(preset.id)}
-            >
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">{preset.label}</span>
-              <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{path}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-
-      {configured && (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className={secondaryButtonClass}
-              disabled={testing || choosing}
-              onClick={handleTest}
-              title="Runs the worker command once with the prompt “Reply with the single word OK”"
-            >
-              {testing ? "Testing (up to 2 min)..." : "Test agent"}
-            </button>
-            {testResult && (
-              <span
-                className={`text-xs font-medium ${
-                  testResult.ok
-                    ? "text-green-700 dark:text-green-400"
-                    : "text-red-600 dark:text-red-400"
-                }`}
-              >
-                {testResult.ok ? "OK" : testResult.timedOut ? "Timed out" : "Failed"}
-              </span>
-            )}
-          </div>
-          {testError && <p className="text-xs text-red-600 dark:text-red-400">{testError}</p>}
-          {testResult?.error && (
-            <p className="text-xs text-red-600 dark:text-red-400">{testResult.error}</p>
-          )}
-        </div>
-      )}
+      <AgentSection config={config} onChange={onChange} />
+      <div className="flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300">
+        {noneDetected && <p>No supported agent CLI was found on your PATH.</p>}
+        <Link
+          to="/settings"
+          className="text-zinc-600 underline hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+        >
+          Use custom commands in Settings
+        </Link>
+      </div>
 
       <Footer skip={skip} onBack={onBack}>
-        <button
-          type="button"
-          className={primaryButtonClass}
-          disabled={!canContinue}
-          onClick={onContinue}
-        >
+        <button type="button" className={primaryButtonClass} onClick={onContinue}>
           Continue
         </button>
       </Footer>

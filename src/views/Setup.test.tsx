@@ -251,16 +251,20 @@ describe("Setup", () => {
       { id: "claude", path: "/usr/local/bin/claude" },
       { id: "other", path: "/bin/other" },
     ]);
-    vi.mocked(testAgentCommand).mockResolvedValue({ ok: true, timedOut: false, output: "OK", error: null });
+    vi.mocked(testAgentCommand).mockResolvedValue({ ok: true, timedOut: false, output: "pong", error: null });
     renderRoutes();
     await connect();
 
     const card = await screen.findByRole("button", { name: /Claude Code/ });
-    expect(card.textContent).toContain("/usr/local/bin/claude");
-    expect(screen.queryByRole("button", { name: /Codex/ })).toBeNull();
+    await waitFor(() => expect(card.textContent).toContain("Detected"));
+    expect(screen.getByRole("button", { name: /Codex/ }).textContent).toContain("Not found");
     expect(screen.queryByText("/bin/other")).toBeNull();
+    expect(screen.queryByText("No supported agent CLI was found on your PATH.")).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Use custom commands in Settings" }).getAttribute("href"),
+    ).toBe("/settings");
     expect(card.getAttribute("aria-pressed")).toBe("false");
-    expect(continueButton().disabled).toBe(true);
+    expect(continueButton().disabled).toBe(false);
 
     const withSource = stored;
     fireEvent.click(card);
@@ -281,6 +285,33 @@ describe("Setup", () => {
     expect(screen.getByText(claude.label)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "I'll set it up myself" })).toBeTruthy();
+  });
+
+  it("choosing an agent over hand-edited commands asks before replacing them", async () => {
+    stored = {
+      ...baseConfig,
+      agent: {
+        ...baseConfig.agent,
+        workerCmd: "my worker",
+        reviewerCmd: "my reviewer",
+        planCmd: "my plan",
+        descriptionCmd: "my desc",
+      },
+    };
+    renderRoutes();
+    await connect();
+    const withSource = stored;
+
+    fireEvent.click(await screen.findByRole("button", { name: /Claude Code/ }));
+    await screen.findByText("Replace your edited commands?");
+    expect(saveConfig).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace" }));
+    await waitFor(() => expect(saveConfig).toHaveBeenCalledTimes(2));
+    expect(saveConfig).toHaveBeenLastCalledWith({
+      ...withSource,
+      agent: applyPreset(withSource.agent, "claude"),
+    });
   });
 
   it("with no agent detected the step explains and still allows finishing", async () => {
@@ -322,8 +353,9 @@ describe("Setup", () => {
   it("finishing the wizard and opening tasks does not redirect back to setup", async () => {
     renderRoutes("/tasks");
     await connect();
-    fireEvent.click(await screen.findByRole("button", { name: /Claude Code/ }));
-    await waitFor(() => expect(continueButton().disabled).toBe(false));
+    const card = await screen.findByRole("button", { name: /Claude Code/ });
+    fireEvent.click(card);
+    await waitFor(() => expect(card.getAttribute("aria-pressed")).toBe("true"));
     fireEvent.click(continueButton());
     await screen.findByText(/Step 3 of 3/);
 
