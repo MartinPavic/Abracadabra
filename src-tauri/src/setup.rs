@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::config::AppConfig;
+use crate::config::{AppConfig, SettingsOverride};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,7 +71,30 @@ fn item(id: &str, ok: bool, blocks: &str, good: &str, bad: String) -> ReadyItem 
     }
 }
 
+/// A command item: ok when the resolved command is set, or when some project override sets one.
+fn command_item(
+    config: &AppConfig,
+    id: &str,
+    blocks: &str,
+    resolved: &str,
+    from_override: impl Fn(&SettingsOverride) -> &Option<String>,
+    bad: String,
+) -> ReadyItem {
+    let global = !resolved.trim().is_empty();
+    let in_override = config
+        .project_overrides
+        .values()
+        .any(|over| from_override(over).as_deref().is_some_and(|cmd| !cmd.trim().is_empty()));
+    let good = if global {
+        format!("A {id} command is set.")
+    } else {
+        format!("A {id} command is set for some projects.")
+    };
+    item(id, global || in_override, blocks, &good, bad)
+}
+
 /// Everything a run (or plan run) needs before it can start, passing items included.
+/// `config` is resolved for the source but still carries every project override.
 pub fn ready_items(config: &AppConfig, has_token: bool, path_var: &str) -> Vec<ReadyItem> {
     let mut items = vec![
         item(
@@ -81,11 +104,12 @@ pub fn ready_items(config: &AppConfig, has_token: bool, path_var: &str) -> Vec<R
             "A token is saved for this git source.",
             "No token is saved for this git source.".to_string(),
         ),
-        item(
+        command_item(
+            config,
             "worker",
-            !config.agent.worker_cmd.trim().is_empty(),
             "run",
-            "A worker command is set.",
+            &config.agent.worker_cmd,
+            |over| &over.worker_cmd,
             "No worker command is set.".to_string(),
         ),
     ];
@@ -99,11 +123,12 @@ pub fn ready_items(config: &AppConfig, has_token: bool, path_var: &str) -> Vec<R
             format!("{preset} was not found on PATH."),
         ));
     }
-    items.push(item(
+    items.push(command_item(
+        config,
         "plan",
-        !config.agent.plan_cmd.trim().is_empty(),
         "plan",
-        "A plan command is set.",
+        &config.agent.plan_cmd,
+        |over| &over.plan_cmd,
         "No plan command is set, so plan runs are unavailable.".to_string(),
     ));
     items
@@ -243,5 +268,60 @@ mod tests {
         assert!(!worker.ok);
         assert_eq!(worker.blocks, "run");
         assert_eq!(worker.message, "No worker command is set.");
+    }
+
+    fn with_project_override(mut config: AppConfig, project: &str, set: impl FnOnce(&mut SettingsOverride)) -> AppConfig {
+        let mut over = SettingsOverride::default();
+        set(&mut over);
+        config.project_overrides.insert(project.to_string(), over);
+        config
+    }
+
+    #[test]
+    fn a_worker_command_set_only_in_a_project_override_counts_as_ready() {
+        let mut config = ready_config("");
+        config.agent.worker_cmd = String::new();
+        let config = with_project_override(config, "group/blank", |o| o.worker_cmd = Some("  ".into()));
+        let config = with_project_override(config, "group/app", |o| o.worker_cmd = Some("my worker".into()));
+        // As `check_ready` passes it: resolved for the source, overrides still attached.
+        let items = ready_items(&config.resolved_for("s1", ""), true, "");
+        let worker = item(&items, "worker");
+        assert!(worker.ok);
+        assert_eq!(worker.message, "A worker command is set for some projects.");
+    }
+
+    #[test]
+    fn a_plan_command_set_only_in_a_project_override_counts_as_ready() {
+        let mut config = ready_config("");
+        config.agent.plan_cmd = String::new();
+        let config = with_project_override(config, "group/app", |o| o.plan_cmd = Some("my plan".into()));
+        let items = ready_items(&config, true, "");
+        let plan = item(&items, "plan");
+        assert!(plan.ok);
+        assert_eq!(plan.message, "A plan command is set for some projects.");
+    }
+
+    #[test]
+    fn blank_commands_in_every_project_override_still_block() {
+        let mut config = ready_config("");
+        config.agent.worker_cmd = String::new();
+        config.agent.plan_cmd = String::new();
+        let config = with_project_override(config, "group/app", |o| {
+            o.worker_cmd = Some(" ".into());
+            o.plan_cmd = None;
+            o.base_branch = Some("main".into());
+        });
+        let items = ready_items(&config, true, "");
+        assert!(!item(&items, "worker").ok);
+        assert!(!item(&items, "plan").ok);
+    }
+
+    #[test]
+    fn a_global_command_keeps_the_plain_message_when_overrides_also_set_one() {
+        let config = with_project_override(ready_config(""), "group/app", |o| {
+            o.worker_cmd = Some("my worker".into());
+        });
+        let items = ready_items(&config, true, "");
+        assert_eq!(item(&items, "worker").message, "A worker command is set.");
     }
 }
