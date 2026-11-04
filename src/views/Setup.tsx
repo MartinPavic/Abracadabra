@@ -163,7 +163,7 @@ export function Setup() {
     setSaving(true);
     setSaveError(null);
     try {
-      const source = await addGitSource(config, update, { ...values, name });
+      const source = await addGitSource(config, update, { ...values, name }, saved?.source.id);
       setSaved({ key: savedKey, source });
       setStep(2);
     } catch (err) {

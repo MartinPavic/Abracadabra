@@ -205,6 +205,47 @@ describe("Setup", () => {
     expect(stored.gitSources).toHaveLength(1);
   });
 
+  it("going back and changing the values replaces the saved source", async () => {
+    renderRoutes();
+    await connect();
+    const oldId = vi.mocked(setToken).mock.calls[0][0];
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText(/Step 1 of 3/);
+    fireEvent.change(screen.getByLabelText("Base URL"), { target: { value: "https://gl.example.com" } });
+    typeToken("glpat-y");
+    await passTest();
+    fireEvent.click(continueButton());
+    await screen.findByText(/Step 2 of 3/);
+
+    const newId = vi.mocked(setToken).mock.calls[1][0];
+    expect(newId).not.toBe(oldId);
+    expect(setToken).toHaveBeenLastCalledWith(newId, "glpat-y");
+    expect(stored.gitSources).toEqual([
+      { id: newId, name: "gl.example.com", provider: "gitlab", baseUrl: "https://gl.example.com", projectFilter: null },
+    ]);
+    expect(removeToken).toHaveBeenCalledExactlyOnceWith(oldId);
+    const calls = (fn: unknown) => vi.mocked(fn as () => void).mock.invocationCallOrder;
+    expect(calls(setToken)[1]).toBeLessThan(calls(saveConfig)[1]);
+    expect(calls(saveConfig)[1]).toBeLessThan(calls(removeToken)[0]);
+  });
+
+  it("a failed replace keeps the first source and removes only the new token", async () => {
+    renderRoutes();
+    await connect();
+    const first = stored.gitSources[0];
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText(/Step 1 of 3/);
+    typeToken("glpat-y");
+    await passTest();
+    vi.mocked(saveConfig).mockRejectedValueOnce("disk full");
+    fireEvent.click(continueButton());
+
+    await screen.findByText("disk full (no host)");
+    const newId = vi.mocked(setToken).mock.calls[1][0];
+    expect(removeToken).toHaveBeenCalledExactlyOnceWith(newId);
+    expect(stored.gitSources).toEqual([first]);
+  });
+
   it("a detected agent can be chosen and fills the preset", async () => {
     vi.mocked(detectAgentClis).mockResolvedValue([
       { id: "claude", path: "/usr/local/bin/claude" },
