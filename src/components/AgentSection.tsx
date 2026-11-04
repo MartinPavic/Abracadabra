@@ -46,9 +46,9 @@ export function AgentSection({
 
   const agent = config.agent;
   const isCustom = agent.preset === "" && agent.workerCmd.trim() !== "";
-  const allCommandsSet = [agent.workerCmd, agent.reviewerCmd, agent.planCmd, agent.descriptionCmd]
-    .every((cmd) => (cmd ?? "").trim() !== "");
-  const handEdited = allCommandsSet && inferPreset(agent) === "";
+  const anyCommandSet = [agent.workerCmd, agent.reviewerCmd, agent.planCmd, agent.descriptionCmd]
+    .some((cmd) => (cmd ?? "").trim() !== "");
+  const handEdited = anyCommandSet && inferPreset(agent) === "";
 
   async function apply(id: PresetId) {
     setPending(null);

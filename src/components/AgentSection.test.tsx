@@ -78,6 +78,16 @@ describe("AgentSection", () => {
     await screen.findByText("Detected");
   });
 
+  it("choosing a preset over partly-filled commands asks first", async () => {
+    const partly = configWith({ workerCmd: "my worker", reviewerCmd: "my reviewer" });
+    const onChange = vi.fn().mockResolvedValue(undefined);
+    render(<AgentSection config={partly} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: /Claude Code/ }));
+    expect(screen.getByText("Replace your edited commands?")).toBeTruthy();
+    expect(onChange).not.toHaveBeenCalled();
+    await screen.findByText("Detected");
+  });
+
   it("a preset that is not on PATH is labelled", async () => {
     render(<AgentSection config={configWith({})} onChange={vi.fn()} />);
     expect(await screen.findByText("Detected")).toBeTruthy();

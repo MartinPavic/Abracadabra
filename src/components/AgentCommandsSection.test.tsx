@@ -24,6 +24,22 @@ const config = {
 } as AppConfig;
 
 describe("AgentCommandsSection presets", () => {
+  it("saving agent commands keeps the other settings", async () => {
+    const onChange = vi.fn().mockResolvedValue(undefined);
+    render(<AgentCommandsSection config={config} onChange={onChange} />);
+    fireEvent.change(screen.getByLabelText("Reviewer command"), { target: { value: "new reviewer" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save commands" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalledOnce());
+    const saved = onChange.mock.calls[0][0] as AppConfig;
+    expect(saved.agent).toMatchObject({
+      workerCmd: "custom worker",
+      reviewerCmd: "new reviewer",
+      credentialEnvVar: "EXISTING_TOKEN",
+      workerPromptFile: "/prompts/worker.md",
+    });
+    expect(saved.testCmd).toBe("pnpm test");
+  });
+
   it("saving agent commands stores the inferred preset", async () => {
     const preset = agentPresets[0];
     const onChange = vi.fn().mockResolvedValue(undefined);
