@@ -1,6 +1,7 @@
 //! Tauri command groups, one module per feature area.
 
 pub mod config;
+pub mod instructions;
 pub mod providers;
 pub mod runs;
 pub mod stashes;

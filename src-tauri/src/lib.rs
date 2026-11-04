@@ -38,6 +38,8 @@ pub fn run() {
             shell_env::merge_login_shell_path();
             migrate::adopt_legacy_data(app.handle());
             let runs_path = app.path().app_data_dir()?.join("runs.json");
+            let instructions_dir = app.path().app_config_dir()?.join("instructions");
+            app.manage(instructions::InstructionsDir(instructions_dir));
             app.manage(run::RunStore::load(runs_path));
             app.manage(run::limiter::RunLimiter::default());
             app.manage(run::limiter::ProjectGate::default());
@@ -66,6 +68,9 @@ pub fn run() {
             commands::config::set_token,
             commands::config::has_token,
             commands::config::remove_token,
+            commands::instructions::get_instructions,
+            commands::instructions::set_instructions,
+            commands::instructions::read_text_file,
             commands::providers::test_connection,
             commands::providers::list_tasks,
             commands::runs::start_run,
