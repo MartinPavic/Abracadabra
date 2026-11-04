@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { ReadyBanner } from "../components/ReadyBanner";
 import { RunStatusPill } from "../components/RunStatus";
 import {
   describeError,
@@ -11,8 +12,10 @@ import {
   startRun,
   type Task,
 } from "../lib/api";
+import { summarizeReady } from "../lib/ready";
 import { getCachedTasks, isFresh, setCachedTasks } from "../lib/taskCache";
 import { useConfig } from "../lib/useConfig";
+import { useReady } from "../lib/useReady";
 
 const ALL = "__all__";
 const HIDE_CLOSED = "__hide_closed__";
@@ -87,6 +90,7 @@ export function TaskList() {
 
   const tasks = view?.tasks ?? null;
   const fetchedAt = view?.fetchedAt ?? null;
+  const { problems, runBlock, planBlock } = summarizeReady(useReady(sourceId) ?? []);
 
   useEffect(() => {
     if (gitSources.length > 0 && !gitSources.some((s) => s.id === sourceId)) {
@@ -345,6 +349,7 @@ export function TaskList() {
       </div>
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      <ReadyBanner problems={problems} />
       {runError && <p className="text-sm text-red-600 dark:text-red-400">{runError}</p>}
       {batchMessage && (
         <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
@@ -358,7 +363,8 @@ export function TaskList() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            disabled={batchRunning}
+            disabled={batchRunning || runBlock !== null}
+            title={runBlock ?? undefined}
             onClick={handleRunSelected}
             className="rounded-md border border-zinc-900 bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
           >
@@ -472,8 +478,8 @@ export function TaskList() {
                       <button
                         type="button"
                         onClick={() => handleRun(task.id, true)}
-                        disabled={startingTask !== null}
-                        title="Produce a plan only: no changes are committed"
+                        disabled={startingTask !== null || planBlock !== null}
+                        title={planBlock ?? "Produce a plan only: no changes are committed"}
                         className="min-w-20 whitespace-nowrap rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
                       >
                         Plan
@@ -481,7 +487,8 @@ export function TaskList() {
                       <button
                         type="button"
                         onClick={() => handleRun(task.id)}
-                        disabled={startingTask !== null}
+                        disabled={startingTask !== null || runBlock !== null}
+                        title={runBlock ?? undefined}
                         className="min-w-24 whitespace-nowrap rounded-md border border-zinc-900 bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
                       >
                         {startingTask === task.id ? "Starting..." : "Run"}
