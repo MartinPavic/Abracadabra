@@ -37,6 +37,49 @@ describe("useReady", () => {
     expect(result.current).toBeNull();
   });
 
+  it("a failed check is not repeated on window focus", async () => {
+    vi.mocked(checkReady).mockRejectedValue(new Error("denied"));
+    const { result } = renderHook(() => useReady("s1"));
+    await waitFor(() => expect(checkReady).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(checkReady).toHaveBeenCalledTimes(1);
+    expect(result.current).toBeNull();
+  });
+
+  it("a failed check does not stop the check for a new source", async () => {
+    vi.mocked(checkReady).mockRejectedValueOnce(new Error("denied")).mockResolvedValue(items("s2"));
+    const { result, rerender } = renderHook(({ id }) => useReady(id), { initialProps: { id: "s1" } });
+    await waitFor(() => expect(checkReady).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(checkReady).toHaveBeenCalledTimes(1);
+    rerender({ id: "s2" });
+    await waitFor(() => expect(result.current).toEqual(items("s2")));
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(checkReady).toHaveBeenCalledTimes(3);
+  });
+
+  it("a successful check is repeated on window focus", async () => {
+    vi.mocked(checkReady).mockResolvedValue([]);
+    renderHook(() => useReady("s1"));
+    await waitFor(() => expect(checkReady).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(checkReady).toHaveBeenCalledTimes(3);
+  });
+
   it("ignores a response for a superseded source", async () => {
     let resolveOld: (value: ReadyItem[]) => void = () => undefined;
     vi.mocked(checkReady)

@@ -10,6 +10,8 @@ export function useReady(sourceId: string | null): ReadyItem[] | null {
     if (!sourceId) return;
     let active = true;
     let latest = 0;
+    // A failed check may be a denied keychain prompt; re-checking on focus would prompt again.
+    let failed = false;
     const check = () => {
       const call = ++latest;
       checkReady(sourceId).then(
@@ -17,15 +19,19 @@ export function useReady(sourceId: string | null): ReadyItem[] | null {
           if (active && call === latest) setItems(result);
         },
         () => {
+          failed = true;
           if (active && call === latest) setItems(null);
         },
       );
     };
+    const onFocus = () => {
+      if (!failed) check();
+    };
     check();
-    window.addEventListener("focus", check);
+    window.addEventListener("focus", onFocus);
     return () => {
       active = false;
-      window.removeEventListener("focus", check);
+      window.removeEventListener("focus", onFocus);
     };
   }, [sourceId]);
 
