@@ -10,6 +10,7 @@ mod migrate;
 mod providers;
 mod run;
 mod secrets;
+pub mod setup;
 mod shell_env;
 mod template;
 
@@ -94,6 +95,8 @@ pub fn run() {
             commands::runs::create_merge_request,
             commands::runs::preview_merge_request,
             commands::runs::retry_run_with_branch,
+            commands::setup::detect_agent_clis,
+            commands::setup::check_ready,
             commands::stashes::list_orphaned_stashes,
             commands::stashes::restore_orphaned_stash,
             commands::tools::open_in_ide,

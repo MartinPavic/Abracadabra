@@ -4,5 +4,6 @@ pub mod config;
 pub mod instructions;
 pub mod providers;
 pub mod runs;
+pub mod setup;
 pub mod stashes;
 pub mod tools;

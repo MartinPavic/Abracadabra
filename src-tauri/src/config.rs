@@ -69,6 +69,8 @@ impl SettingsOverride {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AgentConfig {
+    /// Agent CLI the setup wizard configured (`claude` or `codex`); empty for a custom setup.
+    pub preset: String,
     pub worker_cmd: String,
     pub reviewer_cmd: String,
     /// Worker command used for plan-only runs (typically the worker command with
@@ -95,6 +97,7 @@ pub struct AgentConfig {
 impl Default for AgentConfig {
     fn default() -> Self {
         Self {
+            preset: String::new(),
             worker_cmd: String::new(),
             reviewer_cmd: String::new(),
             plan_cmd: String::new(),
@@ -364,6 +367,14 @@ mod tests {
             original.timeouts.connect_timeout_secs,
             restored.timeouts.connect_timeout_secs
         );
+    }
+
+    #[test]
+    fn an_old_config_without_a_preset_loads_with_an_empty_one() {
+        let restored: AppConfig =
+            serde_json::from_str(r#"{"agent":{"workerCmd":"claude -p","timeoutSecs":60}}"#).unwrap();
+        assert_eq!(restored.agent.preset, "");
+        assert_eq!(restored.agent.worker_cmd, "claude -p");
     }
 
     #[test]
