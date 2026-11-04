@@ -1,0 +1,469 @@
+import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { SETUP_SKIPPED_KEY } from "../components/FirstRunGate";
+import {
+  type AgentTestResult,
+  type AppConfig,
+  type DetectedAgent,
+  describeError,
+  detectAgentClis,
+  type GitProvider,
+  type GitSourceConfig,
+  testAgentCommand,
+  testConnection,
+} from "../lib/api";
+import { agentPresets, applyPreset, type PresetId } from "../lib/agentPresets";
+import { addGitSource } from "../lib/gitSources";
+import { useConfig } from "../lib/useConfig";
+
+type Step = 1 | 2 | 3;
+
+const stepTitles: Record<Step, string> = {
+  1: "Connect a git source",
+  2: "Choose your coding agent",
+  3: "All set",
+};
+
+const defaultUrls: Record<GitProvider, string> = {
+  gitlab: "https://gitlab.com",
+  github: "https://github.com",
+};
+
+const scopeHints: Record<GitProvider, string> = {
+  gitlab:
+    "Scopes: read_api to list issues, api to comment and open merge requests, write_repository to push.",
+  github: "Needs repo access (read and write) to the repositories you work on.",
+};
+
+interface ConnectValues {
+  provider: GitProvider;
+  baseUrl: string;
+  token: string;
+}
+
+type TestState =
+  | { status: "idle" }
+  | { status: "testing" | "success"; key: string }
+  | { status: "error"; key: string; message: string };
+
+const inputClass =
+  "w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+const labelClass = "mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400";
+const secondaryButtonClass =
+  "rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900";
+const primaryButtonClass =
+  "rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300";
+const cardClass = (selected: boolean) =>
+  `flex flex-col gap-0.5 rounded-md border px-3 py-2 text-left text-sm ${
+    selected
+      ? "border-zinc-900 bg-zinc-100 dark:border-zinc-100 dark:bg-zinc-900"
+      : "border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+  }`;
+
+function hostOf(url: string): string | undefined {
+  try {
+    return new URL(url.trim()).host;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Identifies the values a connection test or a save was done for. */
+function connectionKey(values: ConnectValues): string {
+  return JSON.stringify([values.provider, values.baseUrl.trim(), values.token]);
+}
+
+/** First-run wizard: connect a git source, pick an agent, then go to the task list. */
+export function Setup() {
+  const navigate = useNavigate();
+  const { config, loading, error, update } = useConfig();
+  const [step, setStep] = useState<Step>(1);
+  const [values, setValues] = useState<ConnectValues>({
+    provider: "gitlab",
+    baseUrl: defaultUrls.gitlab,
+    token: "",
+  });
+  const [urlEdited, setUrlEdited] = useState(false);
+  const [testState, setTestState] = useState<TestState>({ status: "idle" });
+  const [saved, setSaved] = useState<{ key: string; source: GitSourceConfig } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  function skip() {
+    localStorage.setItem(SETUP_SKIPPED_KEY, "1");
+    navigate("/settings");
+  }
+
+  const skipButton = (
+    <button type="button" className={secondaryButtonClass} onClick={skip}>
+      I'll set it up myself
+    </button>
+  );
+
+  if (loading) {
+    return <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading...</p>;
+  }
+
+  if (error || !config) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <p className="text-sm text-red-600 dark:text-red-400">
+          Failed to load settings: {error ?? "unknown error"}
+        </p>
+        {skipButton}
+      </div>
+    );
+  }
+
+  const key = connectionKey(values);
+  // A result for values the user has since changed no longer counts.
+  const current: TestState =
+    testState.status !== "idle" && testState.key === key ? testState : { status: "idle" };
+  const host = hostOf(values.baseUrl);
+  const name = host ?? values.baseUrl.trim();
+  const alreadySaved = saved?.key === key;
+  const canTest =
+    values.baseUrl.trim() !== "" && values.token.trim() !== "" && current.status !== "testing";
+  const canContinue = (current.status === "success" || alreadySaved) && !saving;
+
+  function changeProvider(provider: GitProvider) {
+    setValues((prev) => ({
+      ...prev,
+      provider,
+      baseUrl: urlEdited ? prev.baseUrl : defaultUrls[provider],
+    }));
+  }
+
+  async function handleTest() {
+    const testedKey = key;
+    setTestState({ status: "testing", key: testedKey });
+    let next: TestState;
+    try {
+      await testConnection({
+        provider: values.provider,
+        baseUrl: values.baseUrl.trim(),
+        token: values.token,
+      });
+      next = { status: "success", key: testedKey };
+    } catch (err) {
+      next = { status: "error", key: testedKey, message: describeError(err, host) };
+    }
+    // A newer test for other values wins.
+    setTestState((prev) => (prev.status === "testing" && prev.key === testedKey ? next : prev));
+  }
+
+  async function handleConnect(event: FormEvent) {
+    event.preventDefault();
+    if (!canContinue || !config) return;
+    if (alreadySaved) {
+      setStep(2);
+      return;
+    }
+    const savedKey = key;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const source = await addGitSource(config, update, { ...values, name });
+      setSaved({ key: savedKey, source });
+      setStep(2);
+    } catch (err) {
+      setSaveError(describeError(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const preset = agentPresets.find((item) => item.id === config.agent.preset);
+  const agentSummary =
+    preset?.label ?? (config.agent.workerCmd.trim() !== "" ? "Custom commands" : "Not set up");
+
+  return (
+    <div className="flex max-w-xl flex-col gap-6">
+      <div>
+        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          Step {step} of 3 &middot; {stepTitles[step]}
+        </p>
+        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+          {stepTitles[step]}
+        </h1>
+      </div>
+
+      {step === 1 && (
+        <form onSubmit={handleConnect} className="flex flex-col gap-4">
+          <div>
+            <label className={labelClass} htmlFor="setup-provider">
+              Provider
+            </label>
+            <select
+              id="setup-provider"
+              className={inputClass}
+              value={values.provider}
+              onChange={(e) => changeProvider(e.target.value as GitProvider)}
+            >
+              <option value="gitlab">GitLab</option>
+              <option value="github">GitHub</option>
+            </select>
+          </div>
+
+          <div>
+            <label className={labelClass} htmlFor="setup-base-url">
+              Base URL
+            </label>
+            <input
+              id="setup-base-url"
+              className={inputClass}
+              value={values.baseUrl}
+              onChange={(e) => {
+                setUrlEdited(true);
+                setValues((prev) => ({ ...prev, baseUrl: e.target.value }));
+              }}
+            />
+            {name !== "" && (
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Saved as “{name}”.</p>
+            )}
+          </div>
+
+          <div>
+            <label className={labelClass} htmlFor="setup-token">
+              Access token
+            </label>
+            <input
+              id="setup-token"
+              type="password"
+              className={inputClass}
+              value={values.token}
+              onChange={(e) => setValues((prev) => ({ ...prev, token: e.target.value }))}
+              placeholder={values.provider === "github" ? "ghp_... or github_pat_..." : "glpat-..."}
+            />
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {scopeHints[values.provider]}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className={secondaryButtonClass}
+              disabled={!canTest}
+              onClick={handleTest}
+            >
+              {current.status === "testing" ? "Testing..." : "Test connection"}
+            </button>
+            {current.status === "success" && (
+              <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
+            )}
+            {current.status === "error" && (
+              <span className="text-sm text-red-600 dark:text-red-400">{current.message}</span>
+            )}
+          </div>
+
+          {saveError && <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>}
+
+          <Footer skip={skipButton}>
+            <button type="submit" className={primaryButtonClass} disabled={!canContinue}>
+              {saving ? "Saving..." : "Continue"}
+            </button>
+          </Footer>
+        </form>
+      )}
+
+      {step === 2 && (
+        <AgentStep
+          config={config}
+          onChange={update}
+          skip={skipButton}
+          onBack={() => setStep(1)}
+          onContinue={() => setStep(3)}
+        />
+      )}
+
+      {step === 3 && (
+        <div className="flex flex-col gap-4">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-zinc-500 dark:text-zinc-400">Git source</dt>
+            <dd className="text-zinc-900 dark:text-zinc-100">
+              {saved ? `${saved.source.name} (${saved.source.baseUrl})` : "None"}
+            </dd>
+            <dt className="text-zinc-500 dark:text-zinc-400">Agent</dt>
+            <dd className="text-zinc-900 dark:text-zinc-100">{agentSummary}</dd>
+          </dl>
+          <Footer skip={skipButton} onBack={() => setStep(2)}>
+            <button type="button" className={primaryButtonClass} onClick={() => navigate("/tasks")}>
+              Go to tasks
+            </button>
+          </Footer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Footer({
+  skip,
+  onBack,
+  children,
+}: {
+  skip: ReactNode;
+  onBack?: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+      {skip}
+      <div className="flex items-center gap-3">
+        {onBack && (
+          <button type="button" className={secondaryButtonClass} onClick={onBack}>
+            Back
+          </button>
+        )}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function AgentStep({
+  config,
+  onChange,
+  skip,
+  onBack,
+  onContinue,
+}: {
+  config: AppConfig;
+  onChange: (next: AppConfig) => Promise<void>;
+  skip: ReactNode;
+  onBack: () => void;
+  onContinue: () => void;
+}) {
+  const [detected, setDetected] = useState<DetectedAgent[] | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<AgentTestResult | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    detectAgentClis()
+      .then((found) => active && setDetected(found))
+      .catch(() => active && setDetected([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const agent = config.agent;
+  const cards = (detected ?? []).flatMap((found) => {
+    const preset = agentPresets.find((item) => item.id === found.id);
+    return preset ? [{ preset, path: found.path }] : [];
+  });
+  const configured = agent.workerCmd.trim() !== "";
+  const canContinue = detected !== null && !choosing && (configured || cards.length === 0);
+
+  async function choose(id: PresetId) {
+    if (id === agent.preset) return;
+    setChoosing(true);
+    setError(null);
+    setTestResult(null);
+    setTestError(null);
+    try {
+      await onChange({ ...config, agent: applyPreset(agent, id) });
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setChoosing(false);
+    }
+  }
+
+  async function handleTest() {
+    setTesting(true);
+    setTestResult(null);
+    setTestError(null);
+    try {
+      setTestResult(await testAgentCommand(agent.workerCmd));
+    } catch (err) {
+      setTestError(describeError(err));
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {detected === null && (
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Looking for agent CLIs...</p>
+      )}
+      {detected !== null && cards.length === 0 && (
+        <div className="flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300">
+          <p>No supported agent CLI was found on your PATH.</p>
+          <Link
+            to="/settings"
+            className="text-zinc-600 underline hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+          >
+            Use custom commands in Settings
+          </Link>
+        </div>
+      )}
+      {cards.length > 0 && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {cards.map(({ preset, path }) => (
+            <button
+              key={preset.id}
+              type="button"
+              aria-pressed={agent.preset === preset.id}
+              disabled={choosing}
+              className={cardClass(agent.preset === preset.id)}
+              onClick={() => void choose(preset.id)}
+            >
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">{preset.label}</span>
+              <span className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{path}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+
+      {configured && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={secondaryButtonClass}
+              disabled={testing || choosing}
+              onClick={handleTest}
+              title="Runs the worker command once with the prompt “Reply with the single word OK”"
+            >
+              {testing ? "Testing (up to 2 min)..." : "Test agent"}
+            </button>
+            {testResult && (
+              <span
+                className={`text-xs font-medium ${
+                  testResult.ok
+                    ? "text-green-700 dark:text-green-400"
+                    : "text-red-600 dark:text-red-400"
+                }`}
+              >
+                {testResult.ok ? "OK" : testResult.timedOut ? "Timed out" : "Failed"}
+              </span>
+            )}
+          </div>
+          {testError && <p className="text-xs text-red-600 dark:text-red-400">{testError}</p>}
+          {testResult?.error && (
+            <p className="text-xs text-red-600 dark:text-red-400">{testResult.error}</p>
+          )}
+        </div>
+      )}
+
+      <Footer skip={skip} onBack={onBack}>
+        <button
+          type="button"
+          className={primaryButtonClass}
+          disabled={!canContinue}
+          onClick={onContinue}
+        >
+          Continue
+        </button>
+      </Footer>
+    </div>
+  );
+}
