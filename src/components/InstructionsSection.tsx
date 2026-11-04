@@ -184,6 +184,7 @@ export function InstructionsSection({ config }: { config: AppConfig }) {
         )}
         {chosen && (
           <InstructionsEditor
+            key={`${chosen.sourceId}\0${chosen.project}`}
             scope={{ kind: "project", sourceId: chosen.sourceId, projectPath: chosen.project }}
             label="Project instructions"
           />

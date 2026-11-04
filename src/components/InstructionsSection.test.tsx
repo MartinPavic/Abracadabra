@@ -128,6 +128,67 @@ describe("InstructionsSection", () => {
     expect(setInstructions).not.toHaveBeenCalled();
   });
 
+  async function openProjectA() {
+    vi.mocked(listRuns).mockResolvedValue([
+      { sourceId: "src-1", project: "a/one" },
+      { sourceId: "src-1", project: "b/two" },
+    ] as Awaited<ReturnType<typeof listRuns>>);
+    vi.mocked(getInstructions).mockImplementation(async (scope) =>
+      scope.kind === "project" ? `rules for ${scope.projectPath}` : "",
+    );
+    render(<InstructionsSection config={config} />);
+    const select = (await screen.findByLabelText("Project")) as HTMLSelectElement;
+    await waitFor(() => expect(select.options.length).toBe(3));
+    fireEvent.change(select, { target: { value: select.options[1].value } });
+    const box = (await screen.findByLabelText("Project instructions")) as HTMLTextAreaElement;
+    await waitFor(() => expect(box.value).toBe("rules for a/one"));
+    return select;
+  }
+
+  async function switchToProjectB(select: HTMLSelectElement) {
+    fireEvent.change(select, { target: { value: select.options[2].value } });
+    await waitFor(() =>
+      expect((screen.getByLabelText("Project instructions") as HTMLTextAreaElement).value).toBe(
+        "rules for b/two",
+      ),
+    );
+  }
+
+  it("a save that finishes after switching project does not mark the new project as saved", async () => {
+    let finishSave!: () => void;
+    vi.mocked(setInstructions).mockReturnValue(new Promise<void>((r) => (finishSave = r)));
+    const select = await openProjectA();
+    const boxA = screen.getByLabelText("Project instructions");
+    fireEvent.change(boxA, { target: { value: "edited a" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[1]);
+    await switchToProjectB(select);
+
+    finishSave();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(screen.queryByText("Saved")).toBeNull();
+    expect(
+      (screen.getAllByRole("button", { name: "Save" })[1] as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("an import that finishes after switching project does not change the new project's text", async () => {
+    let finishRead!: (text: string) => void;
+    vi.mocked(open).mockResolvedValue("/notes/rules.md");
+    vi.mocked(readTextFile).mockReturnValue(new Promise<string>((r) => (finishRead = r)));
+    const select = await openProjectA();
+    fireEvent.click(screen.getAllByRole("button", { name: "Import file..." })[1]);
+    await waitFor(() => expect(readTextFile).toHaveBeenCalled());
+    await switchToProjectB(select);
+
+    finishRead("# imported");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect((screen.getByLabelText("Project instructions") as HTMLTextAreaElement).value).toBe(
+      "rules for b/two",
+    );
+  });
+
   it("a save error keeps the text and shows the message", async () => {
     vi.mocked(setInstructions).mockRejectedValue("Instructions are limited to 50,000 characters");
     render(<InstructionsSection config={config} />);
