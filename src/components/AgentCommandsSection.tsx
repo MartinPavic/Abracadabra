@@ -7,7 +7,7 @@ import {
   type ReviewerGate,
   setToken,
 } from "../lib/api";
-import { agentPresets, inferPreset } from "../lib/agentPresets";
+import { inferPreset } from "../lib/agentPresets";
 import { AutoTextarea } from "./AutoTextarea";
 import { TestCommandButton } from "./TestCommandButton";
 
@@ -45,8 +45,6 @@ export function AgentCommandsSection({
   const [usageRegex, setUsageRegex] = useState(config.agent.usageRegex ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const selectedPreset = inferPreset({ workerCmd, reviewerCmd, planCmd, descriptionCmd });
 
   useEffect(() => {
     hasToken(AGENT_CREDENTIAL_ID)
@@ -97,7 +95,7 @@ export function AgentCommandsSection({
           reviewerCmd,
           planCmd,
           descriptionCmd,
-          preset: selectedPreset,
+          preset: inferPreset({ workerCmd, reviewerCmd, planCmd, descriptionCmd }),
           credentialEnvVar: credentialEnvVar.trim(),
           timeoutSecs,
           workerPromptFile: workerPrompt.trim(),
@@ -137,27 +135,6 @@ export function AgentCommandsSection({
           use issues and agents you trust, and keep secrets out of the environment you launch the
           app from.
         </p>
-      </div>
-      <div>
-        <label className={labelClass} htmlFor="agent-preset">Agent preset</label>
-        <select
-          id="agent-preset"
-          className={inputClass}
-          value={selectedPreset}
-          onChange={(event) => {
-            const preset = agentPresets.find((item) => item.id === event.target.value);
-            if (!preset) return;
-            setWorkerCmd(preset.worker);
-            setReviewerCmd(preset.readOnly);
-            setPlanCmd(preset.readOnly);
-            setDescriptionCmd(preset.readOnly);
-          }}
-        >
-          <option value="" disabled>Custom commands</option>
-          {agentPresets.map((preset) => (
-            <option key={preset.id} value={preset.id}>{preset.label}</option>
-          ))}
-        </select>
       </div>
       <div>
         <label className={labelClass} htmlFor="worker-cmd">
