@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { type AppConfig, getConfig, saveConfig } from "./api";
+import { inferPreset } from "./agentPresets";
 
 export function useConfig() {
   const [config, setConfig] = useState<AppConfig | null>(null);
@@ -23,8 +24,10 @@ export function useConfig() {
   }, [reload]);
 
   const update = useCallback(async (next: AppConfig) => {
-    await saveConfig(next);
-    setConfig(next);
+    // The stored preset always matches the commands: backfilled when empty, cleared after edits.
+    const normalized = { ...next, agent: { ...next.agent, preset: inferPreset(next.agent) } };
+    await saveConfig(normalized);
+    setConfig(normalized);
   }, []);
 
   return { config, loading, error, reload, update };

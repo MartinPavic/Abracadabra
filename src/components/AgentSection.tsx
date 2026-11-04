@@ -45,7 +45,9 @@ export function AgentSection({
   }, []);
 
   const agent = config.agent;
-  const isCustom = agent.preset === "" && agent.workerCmd.trim() !== "";
+  // Configs saved before presets existed have an empty preset; infer it from the commands.
+  const preset = agent.preset || inferPreset(agent);
+  const isCustom = preset === "" && agent.workerCmd.trim() !== "";
   const anyCommandSet = [agent.workerCmd, agent.reviewerCmd, agent.planCmd, agent.descriptionCmd]
     .some((cmd) => (cmd ?? "").trim() !== "");
   const handEdited = anyCommandSet && inferPreset(agent) === "";
@@ -61,7 +63,7 @@ export function AgentSection({
   }
 
   function choose(id: PresetId) {
-    if (id === agent.preset) return;
+    if (id === preset) return;
     if (handEdited) setPending(id);
     else void apply(id);
   }
@@ -85,18 +87,18 @@ export function AgentSection({
     <section className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Agent</h2>
       <div className="grid gap-2 sm:grid-cols-2">
-        {agentPresets.map((preset) => (
+        {agentPresets.map((item) => (
           <button
-            key={preset.id}
+            key={item.id}
             type="button"
-            aria-pressed={agent.preset === preset.id}
-            className={cardClass(agent.preset === preset.id)}
-            onClick={() => choose(preset.id)}
+            aria-pressed={preset === item.id}
+            className={cardClass(preset === item.id)}
+            onClick={() => choose(item.id)}
           >
-            <span className="font-medium text-zinc-900 dark:text-zinc-100">{preset.label}</span>
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">{item.label}</span>
             {detected && (
               <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {detected.has(preset.id) ? "Detected" : "Not found on PATH"}
+                {detected.has(item.id) ? "Detected" : "Not found on PATH"}
               </span>
             )}
           </button>

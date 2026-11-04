@@ -332,6 +332,65 @@ describe("Setup", () => {
     await screen.findByText("Tasks page");
   });
 
+  it("the setup summary names the preset inferred from the commands", async () => {
+    stored = {
+      ...baseConfig,
+      agent: {
+        ...baseConfig.agent,
+        workerCmd: claude.worker,
+        reviewerCmd: claude.readOnly,
+        planCmd: claude.readOnly,
+        descriptionCmd: claude.readOnly,
+        preset: "",
+      },
+    };
+    renderRoutes();
+    await connect();
+    fireEvent.click(continueButton());
+    await screen.findByText(/Step 3 of 3/);
+    expect(screen.getByText(claude.label)).toBeTruthy();
+    expect(screen.queryByText("Custom commands")).toBeNull();
+  });
+
+  it("with existing sources the wizard can continue without adding one", async () => {
+    stored = { ...baseConfig, gitSources: [existingSource] };
+    renderRoutes();
+    await screen.findByText(/Step 1 of 3/);
+    expect(screen.getByLabelText("Access token")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Keep my existing sources" }));
+    await screen.findByText(/Step 2 of 3/);
+    await screen.findByRole("button", { name: /Claude Code/ });
+    expect(setToken).not.toHaveBeenCalled();
+    expect(saveConfig).not.toHaveBeenCalled();
+
+    fireEvent.click(continueButton());
+    await screen.findByText(/Step 3 of 3/);
+    expect(screen.getByText("Work")).toBeTruthy();
+  });
+
+  it("without existing sources there is no way past step 1 except a passing test", async () => {
+    renderRoutes();
+    await screen.findByText(/Step 1 of 3/);
+    expect(screen.queryByRole("button", { name: "Keep my existing sources" })).toBeNull();
+  });
+
+  it("after the wizard saves a source it no longer offers to keep existing ones", async () => {
+    renderRoutes();
+    await connect();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    await screen.findByText(/Step 1 of 3/);
+    expect(stored.gitSources).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Keep my existing sources" })).toBeNull();
+  });
+
+  it("the custom commands link opens Advanced in settings", async () => {
+    renderRoutes();
+    await connect();
+    fireEvent.click(screen.getByRole("link", { name: "Use custom commands in Settings" }));
+    await screen.findByText("Settings page");
+    expect(localStorage.getItem("settings-advanced-open")).toBe("1");
+  });
+
   it("skipping goes to settings and remembers the skip", async () => {
     renderRoutes();
     await screen.findByText(/Step 1 of 3/);

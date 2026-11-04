@@ -109,6 +109,24 @@ describe("AgentSection", () => {
     await screen.findByText("Detected");
   });
 
+  it("AgentSection selects the matching preset card when the stored preset is empty", async () => {
+    const config = configWith({
+      workerCmd: claude.worker,
+      reviewerCmd: claude.readOnly,
+      planCmd: claude.readOnly,
+      descriptionCmd: claude.readOnly,
+      preset: "",
+    });
+    const onChange = vi.fn().mockResolvedValue(undefined);
+    render(<AgentSection config={config} onChange={onChange} />);
+    const card = screen.getByRole("button", { name: /Claude Code/ });
+    expect(card.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText("Custom")).toBeNull();
+    fireEvent.click(card);
+    expect(onChange).not.toHaveBeenCalled();
+    await screen.findByText("Detected");
+  });
+
   it("a custom setup shows the custom card", async () => {
     render(<AgentSection config={handEdited} onChange={vi.fn()} />);
     expect(screen.getByText("Custom")).toBeTruthy();

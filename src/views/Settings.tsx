@@ -10,7 +10,7 @@ import { ProjectOverridesSection } from "../components/ProjectOverridesSection";
 import { TemplatesSection } from "../components/TemplatesSection";
 import { useConfig } from "../lib/useConfig";
 
-const ADVANCED_OPEN_KEY = "settings-advanced-open";
+export const ADVANCED_OPEN_KEY = "settings-advanced-open";
 
 export function Settings() {
   const { config, loading, error, update } = useConfig();

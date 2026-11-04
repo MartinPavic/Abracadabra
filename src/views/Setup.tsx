@@ -10,9 +10,10 @@ import {
   type GitSourceConfig,
   testConnection,
 } from "../lib/api";
-import { agentPresets } from "../lib/agentPresets";
+import { agentPresets, inferPreset } from "../lib/agentPresets";
 import { addGitSource } from "../lib/gitSources";
 import { useConfig } from "../lib/useConfig";
+import { ADVANCED_OPEN_KEY } from "./Settings";
 
 type Step = 1 | 2 | 3;
 
@@ -165,9 +166,16 @@ export function Setup() {
     }
   }
 
-  const preset = agentPresets.find((item) => item.id === config.agent.preset);
+  const preset = agentPresets.find(
+    (item) => item.id === (config.agent.preset || inferPreset(config.agent)),
+  );
   const agentSummary =
     preset?.label ?? (config.agent.workerCmd.trim() !== "" ? "Custom commands" : "Not set up");
+  // Offered only when the sources predate this wizard session.
+  const canKeepSources = config.gitSources.length > 0 && !saved;
+  const sourceSummary = saved
+    ? `${saved.source.name} (${saved.source.baseUrl})`
+    : config.gitSources.map((source) => source.name).join(", ") || "None";
 
   return (
     <div className="flex max-w-xl flex-col gap-6">
@@ -252,6 +260,11 @@ export function Setup() {
           {saveError && <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>}
 
           <Footer skip={skipButton}>
+            {canKeepSources && (
+              <button type="button" className={secondaryButtonClass} onClick={() => setStep(2)}>
+                Keep my existing sources
+              </button>
+            )}
             <button type="submit" className={primaryButtonClass} disabled={!canContinue}>
               {saving ? "Saving..." : "Continue"}
             </button>
@@ -273,9 +286,7 @@ export function Setup() {
         <div className="flex flex-col gap-4">
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
             <dt className="text-zinc-500 dark:text-zinc-400">Git source</dt>
-            <dd className="text-zinc-900 dark:text-zinc-100">
-              {saved ? `${saved.source.name} (${saved.source.baseUrl})` : "None"}
-            </dd>
+            <dd className="text-zinc-900 dark:text-zinc-100">{sourceSummary}</dd>
             <dt className="text-zinc-500 dark:text-zinc-400">Agent</dt>
             <dd className="text-zinc-900 dark:text-zinc-100">{agentSummary}</dd>
           </dl>
@@ -346,6 +357,7 @@ function AgentStep({
         {noneDetected && <p>No supported agent CLI was found on your PATH.</p>}
         <Link
           to="/settings"
+          onClick={() => localStorage.setItem(ADVANCED_OPEN_KEY, "1")}
           className="text-zinc-600 underline hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
         >
           Use custom commands in Settings
