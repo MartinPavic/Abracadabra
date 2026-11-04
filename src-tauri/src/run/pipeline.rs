@@ -27,6 +27,7 @@ use crate::git::inplace::{
 use crate::git::locks::RepoLocks;
 use crate::git::repo::{ensure_clone, managed_repo_dir, prepare_local_repo};
 use crate::git::{resolve_base, rev_parse};
+use crate::instructions::load_for;
 use crate::git::worktree::{
     branch_exists, is_valid_branch_name, render_branch_name, suggest_free_branch,
 };
@@ -359,6 +360,7 @@ async fn run_steps<R: Runtime>(app: &AppHandle<R>, config: &AppConfig, input: &R
     drop(repo_guard);
 
     enter(app, run_id, RunStatus::Working, None)?;
+    let instructions = load_for(app, &input.source_id, &input.project_path);
     let ctx = WorkContext {
         run_id,
         title: &input.title,
@@ -366,6 +368,7 @@ async fn run_steps<R: Runtime>(app: &AppHandle<R>, config: &AppConfig, input: &R
         issue_ref: &input.issue_ref,
         labels: &input.labels,
         plan: input.plan.as_deref(),
+        instructions: instructions.as_deref(),
         work_dir: &repo_path,
         base: &base_commit,
     };
@@ -383,12 +386,14 @@ async fn plan_only_steps<R: Runtime>(
 ) -> Result<(), String> {
     let run_id = input.run_id.as_str();
     let runtime = agent_runtime(config)?;
+    let instructions = load_for(app, &input.source_id, &input.project_path);
     let plan_input = WorkerInput {
         title: &input.title,
         description: &input.description,
         feedback: None,
         plan: None,
         plan_only: true,
+        instructions: instructions.as_deref(),
     };
     // A work run in the same folder changes files legitimately, so the check
     // only means something while none is active.
@@ -485,6 +490,7 @@ async fn redo_steps<R: Runtime>(
         return enter(app, run_id, RunStatus::AwaitingApproval, None);
     }
 
+    let instructions = load_for(app, &record.source_id, &record.project);
     let ctx = WorkContext {
         run_id,
         title: &record.task_title,
@@ -492,6 +498,7 @@ async fn redo_steps<R: Runtime>(
         issue_ref: &record.issue_ref,
         labels: &record.labels,
         plan: record.plan.as_deref(),
+        instructions: instructions.as_deref(),
         work_dir,
         base,
     };
@@ -552,6 +559,7 @@ struct WorkContext<'a> {
     issue_ref: &'a str,
     labels: &'a [String],
     plan: Option<&'a str>,
+    instructions: Option<&'a str>,
     work_dir: &'a Path,
     /// Commit the run's branch was cut from.
     base: &'a str,
@@ -575,6 +583,7 @@ impl<R: Runtime> Steps<'_, R> {
             feedback,
             plan: self.ctx.plan,
             plan_only: false,
+            instructions: self.ctx.instructions,
         };
         run_worker(
             self.app,
@@ -605,6 +614,7 @@ impl<R: Runtime> Steps<'_, R> {
             description: self.ctx.description,
             base: self.ctx.base,
             tests,
+            instructions: self.ctx.instructions,
         };
         let notes = run_reviewer(
             self.app,

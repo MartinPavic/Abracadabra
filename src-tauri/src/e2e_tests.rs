@@ -11,6 +11,7 @@ use crate::config::AppConfig;
 use crate::error::AppError;
 use crate::git::inplace::undo_run;
 use crate::git::locks::RepoLocks;
+use crate::instructions::{self, Scope};
 use crate::run::file_review::{finish_review, Decision, MarkChange};
 use crate::run::limiter::RunLimiter;
 use crate::run::pipeline::{enter, execute_redo, execute_run, request_cancel, RunInput};
@@ -60,9 +61,14 @@ fn setup() -> Env {
     git(&work, &["push", "-q", "origin", "dev"]);
     git(&work, &["checkout", "-q", "main"]);
 
+    // A per-test identifier gives each app its own data dir, so tests running in parallel
+    // don't overwrite each other's prompt files (`<run id>-worker.md`).
+    let mut context = mock_context(noop_assets());
+    let unique = tmp.path().file_name().unwrap().to_string_lossy().trim_start_matches('.').to_string();
+    context.config_mut().identifier = format!("com.abracadabra.e2e.{unique}");
     let app = mock_builder()
         .plugin(tauri_plugin_notification::init())
-        .build(mock_context(noop_assets()))
+        .build(context)
         .expect("mock app");
     app.manage(RunStore::default());
     app.manage(RunLimiter::default());
@@ -70,7 +76,16 @@ fn setup() -> Env {
     app.manage(crate::git::locks::RepoLocks::default());
     app.manage(crate::agent::runner::ProcessRegistry::default());
     app.manage(crate::agent::runner::OutputBuffer::default());
+    app.manage(instructions::InstructionsDir(tmp.path().join("instructions")));
     Env { _tmp: tmp, origin, work, scripts, app }
+}
+
+impl Drop for Env {
+    fn drop(&mut self) {
+        if let Ok(dir) = self.app.path().app_data_dir() {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
 }
 
 impl Env {
@@ -133,6 +148,30 @@ impl Env {
 
     fn head(&self) -> String {
         git(&self.work, &["rev-parse", "--abbrev-ref", "HEAD"])
+    }
+
+    fn write_instructions(&self, scope: &Scope, text: &str) {
+        instructions::write(&instructions::dir(self.app.handle()), scope, text).unwrap();
+    }
+
+    /// Where the capturing fake agents leave the prompt they were given (outside the repo).
+    fn captured(&self, name: &str) -> String {
+        std::fs::read_to_string(self.scripts.join(name)).unwrap()
+    }
+
+    /// Config whose worker, reviewer and plan agents each save their prompt file to the scripts dir.
+    fn capturing_config(&self) -> AppConfig {
+        let capture = |name: &str, reply: &str| {
+            let body = format!("cp \"$1\" {}\n{reply}", self.scripts.join(name).display());
+            script(&self.scripts, &format!("{name}.sh"), &body)
+        };
+        let mut config = self.config(&capture(
+            "worker_prompt.txt",
+            "echo 'agent change' >> agent_output.txt\necho '- changed'",
+        ));
+        config.agent.reviewer_cmd = capture("reviewer_prompt.txt", "echo 'looks fine'");
+        config.agent.plan_cmd = capture("plan_prompt.txt", "echo '1. edit the file'");
+        config
     }
 
     fn branches(&self) -> String {
@@ -603,6 +642,78 @@ async fn a_plan_run_that_changes_files_fails() {
 
     assert_eq!(record.status, RunStatus::Failed);
     assert!(record.error.unwrap().contains("plan command changed files"));
+}
+
+fn project_scope() -> Scope {
+    Scope::Project { source_id: "s".to_string(), project_path: "group/proj".to_string() }
+}
+
+#[tokio::test]
+async fn a_run_gives_the_agents_the_users_instructions() {
+    let env = setup();
+    env.write_instructions(&Scope::Global, "GLOBAL-RULE");
+    env.write_instructions(&project_scope(), "PROJECT-RULE");
+
+    let record = env.run(&env.capturing_config(), false).await;
+
+    assert_eq!(record.status, RunStatus::AwaitingApproval, "{:?}", record.error);
+    for name in ["worker_prompt.txt", "reviewer_prompt.txt"] {
+        let prompt = env.captured(name);
+        let (global, project) = (prompt.find("GLOBAL-RULE"), prompt.find("PROJECT-RULE"));
+        assert!(global.is_some() && project.is_some(), "{name}: {prompt}");
+        assert!(global < project, "{name}: {prompt}");
+        assert!(prompt.contains("## Instructions from the user"), "{name}: {prompt}");
+    }
+}
+
+#[tokio::test]
+async fn a_redo_gives_the_worker_the_instructions_again() {
+    let env = setup();
+    let config = env.capturing_config();
+    let record = env.run(&config, false).await;
+    assert_eq!(record.status, RunStatus::AwaitingApproval, "{:?}", record.error);
+    assert!(!env.captured("worker_prompt.txt").contains("GLOBAL-RULE"));
+
+    env.write_instructions(&Scope::Global, "GLOBAL-RULE");
+    enter(env.app.handle(), RUN_ID, RunStatus::Queued, None).unwrap();
+    execute_redo(env.app.handle(), &config, RUN_ID.to_string(), "again".to_string()).await;
+
+    let record = env.store().get(RUN_ID).unwrap();
+    assert_eq!(record.status, RunStatus::AwaitingApproval, "{:?}", record.redo_error);
+    let worker = env.captured("worker_prompt.txt");
+    assert!(worker.contains("## Instructions from the user\n\nGLOBAL-RULE"), "{worker}");
+    assert!(worker.contains("again"), "{worker}");
+    assert!(env.captured("reviewer_prompt.txt").contains("GLOBAL-RULE"));
+}
+
+#[tokio::test]
+async fn a_plan_run_gets_the_instructions() {
+    let env = setup();
+    env.write_instructions(&project_scope(), "PROJECT-RULE");
+
+    let record = env.run(&env.capturing_config(), true).await;
+
+    assert_eq!(record.status, RunStatus::Planned, "{:?}", record.error);
+    let prompt = env.captured("plan_prompt.txt");
+    assert!(prompt.contains("## Instructions from the user\n\n### For this project\n\nPROJECT-RULE"), "{prompt}");
+}
+
+#[tokio::test]
+async fn agents_without_instructions_get_no_instructions_section() {
+    let env = setup();
+    // Another project's instructions must not leak in.
+    env.write_instructions(
+        &Scope::Project { source_id: "s".to_string(), project_path: "other/proj".to_string() },
+        "OTHER-RULE",
+    );
+
+    let record = env.run(&env.capturing_config(), false).await;
+
+    assert_eq!(record.status, RunStatus::AwaitingApproval, "{:?}", record.error);
+    for name in ["worker_prompt.txt", "reviewer_prompt.txt"] {
+        let prompt = env.captured(name);
+        assert!(!prompt.contains("Instructions from the user") && !prompt.contains("OTHER-RULE"), "{name}: {prompt}");
+    }
 }
 
 /// Cancels the run once it has left `queued`.

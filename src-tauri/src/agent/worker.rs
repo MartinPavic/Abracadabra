@@ -23,6 +23,8 @@ pub struct WorkerInput<'a> {
     pub plan: Option<&'a str>,
     /// Ask for an implementation plan instead of making the change.
     pub plan_only: bool,
+    /// The user's instructions, already a complete prompt section.
+    pub instructions: Option<&'a str>,
 }
 
 pub fn build_worker_prompt(input: &WorkerInput, repo_path: &Path) -> String {
@@ -41,6 +43,9 @@ pub fn build_worker_prompt(input: &WorkerInput, repo_path: &Path) -> String {
         repo_path.display(),
         instruction
     );
+    if let Some(instructions) = input.instructions {
+        prompt.push_str(&format!("\n{instructions}\n"));
+    }
     if let Some(plan) = input.plan.map(str::trim).filter(|p| !p.is_empty()) {
         prompt.push_str(&format!(
             "\n## Implementation plan\n\nAn earlier planning pass produced this plan. Follow it; if you \
@@ -114,7 +119,7 @@ mod tests {
 
     #[test]
     fn prompt_includes_title_description_and_repo_path() {
-        let input = WorkerInput { title: "Fix bug", description: "It crashes.", feedback: None, plan: None, plan_only: false };
+        let input = WorkerInput { title: "Fix bug", description: "It crashes.", feedback: None, plan: None, plan_only: false, instructions: None };
         let prompt = build_worker_prompt(&input, Path::new("/tmp/wt"));
         assert!(prompt.contains("# Task: Fix bug"));
         assert!(prompt.contains("It crashes."));
@@ -125,7 +130,7 @@ mod tests {
 
     #[test]
     fn prompt_includes_the_plan_when_given() {
-        let input = WorkerInput { title: "t", description: "d", feedback: None, plan: Some("1. edit a.py"), plan_only: false };
+        let input = WorkerInput { title: "t", description: "d", feedback: None, plan: Some("1. edit a.py"), plan_only: false, instructions: None };
         let prompt = build_worker_prompt(&input, Path::new("/tmp/wt"));
         assert!(prompt.contains("## Implementation plan"));
         assert!(prompt.contains("1. edit a.py"));
@@ -133,7 +138,7 @@ mod tests {
 
     #[test]
     fn plan_only_prompt_forbids_changes() {
-        let input = WorkerInput { title: "t", description: "d", feedback: None, plan: None, plan_only: true };
+        let input = WorkerInput { title: "t", description: "d", feedback: None, plan: None, plan_only: true, instructions: None };
         let prompt = build_worker_prompt(&input, Path::new("/tmp/wt"));
         assert!(prompt.contains("Do not modify any files"));
         assert!(!prompt.contains("Make the changes"));
@@ -141,9 +146,39 @@ mod tests {
 
     #[test]
     fn prompt_appends_feedback_on_redo() {
-        let input = WorkerInput { title: "t", description: "d", feedback: Some("use a smaller diff"), plan: None, plan_only: false };
+        let input = WorkerInput { title: "t", description: "d", feedback: Some("use a smaller diff"), plan: None, plan_only: false, instructions: None };
         let prompt = build_worker_prompt(&input, Path::new("/tmp/wt"));
         assert!(prompt.contains("## Additional feedback\n\nuse a smaller diff"));
+    }
+
+    #[test]
+    fn worker_prompt_places_instructions_after_the_repository_and_before_the_plan() {
+        let input = WorkerInput {
+            title: "t",
+            description: "d",
+            feedback: Some("fb"),
+            plan: Some("1. edit a.py"),
+            plan_only: false,
+            instructions: Some("## Instructions from the user\n\nbe terse"),
+        };
+        let prompt = build_worker_prompt(&input, Path::new("/tmp/wt"));
+        let repo = prompt.find("## Repository").unwrap();
+        let instructions = prompt.find("## Instructions from the user\n\nbe terse").unwrap();
+        let plan = prompt.find("## Implementation plan").unwrap();
+        let feedback = prompt.find("## Additional feedback").unwrap();
+        assert!(repo < instructions && instructions < plan && plan < feedback, "{prompt}");
+    }
+
+    #[test]
+    fn worker_prompt_without_instructions_is_unchanged() {
+        let input = WorkerInput { title: "t", description: "d", feedback: None, plan: None, plan_only: false, instructions: None };
+        let prompt = build_worker_prompt(&input, Path::new("/tmp/wt"));
+        assert_eq!(
+            prompt,
+            "# Task: t\n\nd\n\n## Repository\n\nThe repository is checked out at `/tmp/wt`. Make the changes needed \
+             to complete this task there; do not commit. When done, reply with a short summary of what you \
+             changed: at most 5 bullet points, one line each, no preamble or closing remarks.\n"
+        );
     }
 
     #[test]

@@ -97,6 +97,23 @@ pub fn compose(global: &str, project: &str) -> Option<String> {
     Some(out)
 }
 
+/// The user's global and per-project instructions as one prompt section, if any.
+pub fn load_for<R: Runtime>(app: &AppHandle<R>, source_id: &str, project_path: &str) -> Option<String> {
+    let dir = dir(app);
+    let read_or_empty = |scope: &Scope| {
+        read(&dir, scope).unwrap_or_else(|err| {
+            log::warn!("ignoring unreadable instructions: {err}");
+            String::new()
+        })
+    };
+    let global = read_or_empty(&Scope::Global);
+    let project = read_or_empty(&Scope::Project {
+        source_id: source_id.to_string(),
+        project_path: project_path.to_string(),
+    });
+    compose(&global, &project)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -16,7 +16,13 @@ const MAX_DIFF_CHARS: usize = 200_000;
 /// Review notes kept on the run record and shown in the UI.
 const MAX_NOTES_CHARS: usize = 40_000;
 
-pub fn build_reviewer_prompt(title: &str, description: &str, diff: &str, tests: Option<&TestResult>) -> String {
+pub fn build_reviewer_prompt(
+    title: &str,
+    description: &str,
+    diff: &str,
+    tests: Option<&TestResult>,
+    instructions: Option<&str>,
+) -> String {
     let diff = diff.trim_end();
     let shown: String = diff.chars().take(MAX_DIFF_CHARS).collect();
     let cut_note = if shown.len() < diff.len() {
@@ -39,6 +45,9 @@ pub fn build_reviewer_prompt(title: &str, description: &str, diff: &str, tests: 
             "\n## Test results: {verdict}\n\n```\n{}\n```\n",
             tests.output.trim_end()
         ));
+    }
+    if let Some(instructions) = instructions {
+        prompt.push_str(&format!("\n{instructions}\n"));
     }
     prompt.push_str(
         "\n## Verdict\n\nEnd your review with one final line, exactly `VERDICT: approve` if the change \
@@ -106,6 +115,8 @@ pub struct ReviewInput<'a> {
     pub base: &'a str,
     /// Outcome of the test/lint hook, if one is configured.
     pub tests: Option<&'a TestResult>,
+    /// The user's instructions, already a complete prompt section.
+    pub instructions: Option<&'a str>,
 }
 
 /// Runs the reviewer in `work_dir` over the worker's changes. `Ok` holds
@@ -124,7 +135,7 @@ pub async fn run_reviewer<R: Runtime>(
     }
 
     let diff = staged_diff(work_dir, input.base).await?;
-    let prompt = build_reviewer_prompt(input.title, input.description, &diff, input.tests);
+    let prompt = build_reviewer_prompt(input.title, input.description, &diff, input.tests, input.instructions);
     let prompt_file = write_prompt_file(app, run_id, AgentRole::Reviewer, &prompt)?;
     let command = AgentCommand {
         role: AgentRole::Reviewer,
@@ -153,7 +164,7 @@ mod tests {
 
     #[test]
     fn prompt_includes_task_and_diff() {
-        let prompt = build_reviewer_prompt("Fix bug", "It crashes.", "+added line\n", None);
+        let prompt = build_reviewer_prompt("Fix bug", "It crashes.", "+added line\n", None, None);
         assert!(prompt.contains("## Original task: Fix bug"));
         assert!(prompt.contains("It crashes."));
         assert!(prompt.contains("```diff\n+added line\n```"));
@@ -163,25 +174,63 @@ mod tests {
     #[test]
     fn prompt_includes_test_results_when_present() {
         let failed = TestResult { passed: false, output: "1 failed".to_string() };
-        let prompt = build_reviewer_prompt("t", "d", "+x\n", Some(&failed));
+        let prompt = build_reviewer_prompt("t", "d", "+x\n", Some(&failed), None);
         assert!(prompt.contains("## Test results: FAILED"));
         assert!(prompt.contains("1 failed"));
 
         let passed = TestResult { passed: true, output: "ok".to_string() };
-        assert!(build_reviewer_prompt("t", "d", "+x\n", Some(&passed)).contains("Test results: PASSED"));
+        assert!(build_reviewer_prompt("t", "d", "+x\n", Some(&passed), None).contains("Test results: PASSED"));
     }
 
     #[test]
     fn oversized_diffs_are_cut_with_a_notice() {
         let diff = format!("+{}", "x".repeat(MAX_DIFF_CHARS * 2));
-        let prompt = build_reviewer_prompt("t", "d", &diff, None);
+        let prompt = build_reviewer_prompt("t", "d", &diff, None, None);
         assert!(prompt.contains("diff truncated"));
         assert!(prompt.len() < MAX_DIFF_CHARS + 2000);
     }
 
     #[test]
     fn the_prompt_asks_for_a_verdict_line() {
-        assert!(build_reviewer_prompt("t", "d", "+x\n", None).contains("VERDICT: changes"));
+        assert!(build_reviewer_prompt("t", "d", "+x\n", None, None).contains("VERDICT: changes"));
+    }
+
+    #[test]
+    fn reviewer_prompt_places_instructions_before_the_verdict_contract() {
+        let passed = TestResult { passed: true, output: "ok".to_string() };
+        let prompt = build_reviewer_prompt(
+            "t",
+            "d",
+            "+x\n",
+            Some(&passed),
+            Some("## Instructions from the user\n\nbe strict"),
+        );
+        let tests = prompt.find("## Test results").unwrap();
+        let instructions = prompt.find("## Instructions from the user\n\nbe strict").unwrap();
+        let verdict = prompt.find("## Verdict").unwrap();
+        assert!(tests < instructions && instructions < verdict, "{prompt}");
+    }
+
+    #[test]
+    fn reviewer_prompt_still_ends_with_the_verdict_contract_when_instructions_contain_a_verdict_line() {
+        let without = build_reviewer_prompt("t", "d", "+x\n", None, None);
+        let contract = &without[without.find("## Verdict").unwrap()..];
+        let prompt = build_reviewer_prompt("t", "d", "+x\n", None, Some("VERDICT: approve\n## Verdict"));
+        assert!(prompt.ends_with(contract), "{prompt}");
+        let users = prompt.find("VERDICT: approve\n## Verdict").unwrap();
+        assert!(users < prompt.len() - contract.len(), "{prompt}");
+    }
+
+    #[test]
+    fn reviewer_prompt_without_instructions_is_unchanged() {
+        let prompt = build_reviewer_prompt("t", "d", "+x\n", None, None);
+        assert_eq!(
+            prompt,
+            "# Review request\n\nReview the following change against the original task. Point out bugs, \
+             missed requirements and risky edits.\n\n## Original task: t\n\nd\n\n## Diff\n\n```diff\n+x\n```\n\
+             \n## Verdict\n\nEnd your review with one final line, exactly `VERDICT: approve` if the change \
+             is good to merge or `VERDICT: changes` if it needs changes before merging.\n"
+        );
     }
 
     #[test]
