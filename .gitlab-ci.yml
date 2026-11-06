@@ -1,4 +1,4 @@
-# Untested: the project had no git remote when this was written.
+# Untested. The GitHub Actions workflows in .github/workflows are the maintained pipeline.
 stages: [check, bundle]
 
 frontend:

@@ -45,8 +45,20 @@ cargo test    # run unit tests (keychain round-trip test is #[ignore]d by defaul
 ```
 
 The built app is `src-tauri/target/release/bundle/macos/Abracadabra.app` (unsigned; right-click and
-choose Open the first time). `.gitlab-ci.yml` runs the checks on every push and builds the bundle
-on tags (needs a runner tagged `macos`).
+choose Open the first time).
+
+### CI and releases
+
+`.github/workflows/ci.yml` runs the frontend and backend checks on every push to `main` and on pull
+requests. Pushing a tag such as `v0.1.0` runs `.github/workflows/release.yml`, which builds unsigned
+macOS bundles (Apple silicon and Intel) and attaches them to a draft GitHub release. Keep the version
+in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json` in step with the tag.
+
+Signing and notarization need an Apple Developer account. To enable them, add the repository secrets
+`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`,
+`APPLE_PASSWORD` and `APPLE_TEAM_ID`, and pass them as `env` to the `tauri-action` step.
+
+`.gitlab-ci.yml` is the older GitLab equivalent (its macOS bundle job needs a runner tagged `macos`).
 
 ## Project layout
 
