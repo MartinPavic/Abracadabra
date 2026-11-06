@@ -121,6 +121,8 @@ describe("Tabs", () => {
     expect(alphaDot?.className).toContain("bg-amber-500");
     expect(alphaDot?.className).not.toContain("animate-pulse");
     expect(alpha.textContent).toContain("needs attention");
+    expect(screen.getByRole("tab", { name: "Alpha needs attention" })).toBe(alpha);
+    expect(screen.getByRole("tab", { name: "Beta active" })).toBeTruthy();
 
     const beta = screen.getByRole("tab", { name: /Beta/ });
     const betaDot = beta.querySelector("[aria-hidden='true']");

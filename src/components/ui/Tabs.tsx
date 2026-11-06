@@ -90,7 +90,9 @@ export function Tabs<T extends string>({
                       : "h-2 w-2 rounded-full bg-amber-500 dark:bg-amber-400"
                   }
                 />
-                <span className="sr-only">{tab.indicator === "pulse" ? "active" : "needs attention"}</span>
+                {/* Keeps a space between the label and the sr-only text in the accessible name. */}
+                {" "}
+                <span className="sr-only">{tab.indicator === "pulse" ? " active" : " needs attention"}</span>
               </>
             )}
           </button>
