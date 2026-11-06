@@ -18,7 +18,7 @@ export function TasksPage() {
   const setTab = (next: Tab) => setParams(next === "tasks" ? {} : { tab: next });
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col pb-6">
       <PageHeader title="Tasks" description="Issues assigned to you, ready to hand to an agent." />
       <Tabs tabs={TABS} value={tab} onChange={setTab} idPrefix="tasks-page" label="Tasks and history" />
 

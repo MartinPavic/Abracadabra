@@ -102,3 +102,18 @@ describe("TaskList ready check", () => {
     expect((screen.getByRole("button", { name: "Plan" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
+
+describe("TaskList toolbar", () => {
+  it("the task list toolbar stays pinned while the list scrolls", async () => {
+    await renderList([ok("token")]);
+    screen.getByRole("checkbox", { name: "Select Fix login bug" }).click();
+    const batch = await screen.findByRole("button", { name: /Run selected/ });
+    const toolbar = screen.getByLabelText("Search by title").closest(".sticky") as HTMLElement;
+    expect(toolbar).not.toBeNull();
+    expect(toolbar.contains(batch)).toBe(true);
+    expect(toolbar.contains(screen.getByRole("button", { name: "Refresh" }))).toBe(true);
+    for (const name of ["top-0", "z-10", "bg-zinc-50", "dark:bg-zinc-950"]) {
+      expect(toolbar.classList.contains(name)).toBe(true);
+    }
+  });
+});

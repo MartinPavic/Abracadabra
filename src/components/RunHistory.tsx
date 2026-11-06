@@ -62,7 +62,7 @@ export function RunHistory() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-3 bg-zinc-50 px-1 py-2 dark:bg-zinc-950">
         <div className="relative w-64">
           <Icon
             name="search"

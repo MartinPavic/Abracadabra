@@ -271,7 +271,7 @@ export function TaskList() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-2 bg-zinc-50 px-1 py-2 dark:bg-zinc-950">
         {gitSources.length > 1 && (
           <div className="w-40">
             <Select

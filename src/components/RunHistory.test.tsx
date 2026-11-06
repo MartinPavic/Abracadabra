@@ -62,4 +62,15 @@ describe("RunHistory", () => {
     await waitFor(() => expect(deleteRun).toHaveBeenCalledWith("1"));
     await waitFor(() => expect(screen.queryByText("Fix login bug")).toBeNull());
   });
+
+  it("the history controls stay pinned while the list scrolls", async () => {
+    renderHistory();
+    await screen.findByText("Fix login bug");
+    const toolbar = screen.getByLabelText("Search runs").closest(".sticky") as HTMLElement;
+    expect(toolbar).not.toBeNull();
+    expect(toolbar.contains(screen.getByLabelText("Filter by status"))).toBe(true);
+    for (const name of ["top-0", "z-10", "bg-zinc-50", "dark:bg-zinc-950"]) {
+      expect(toolbar.classList.contains(name)).toBe(true);
+    }
+  });
 });
