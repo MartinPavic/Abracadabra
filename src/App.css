@@ -3,6 +3,23 @@
 /* Dark mode driven by the `.dark` class on <html> (toggled from `useTheme`), not just system preference. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-accent-50: var(--color-indigo-50);
+  --color-accent-100: var(--color-indigo-100);
+  --color-accent-200: var(--color-indigo-200);
+  --color-accent-300: var(--color-indigo-300);
+  --color-accent-400: var(--color-indigo-400);
+  --color-accent-500: var(--color-indigo-500);
+  --color-accent-600: var(--color-indigo-600);
+  --color-accent-700: var(--color-indigo-700);
+  --color-accent-800: var(--color-indigo-800);
+  --color-accent-900: var(--color-indigo-900);
+  --color-accent-950: var(--color-indigo-950);
+}
+
 :root {
   color-scheme: light dark;
 }
@@ -15,6 +32,6 @@ body,
 
 body {
   margin: 0;
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
 }
 
