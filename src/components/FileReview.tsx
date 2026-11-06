@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type Decision,
   describeError,
@@ -51,6 +51,7 @@ export function FileReview({ run, onChanged }: { run: RunRecord; onChanged: () =
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const root = useRef<HTMLElement>(null);
 
   const paths = files?.map((f) => f.path) ?? [];
   const current = files && index !== null ? files[index] : null;
@@ -127,6 +128,8 @@ export function FileReview({ run, onChanged }: { run: RunRecord; onChanged: () =
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.repeat || busy || !current || event.metaKey || event.ctrlKey || event.altKey) return;
+      // Handled elsewhere (e.g. tab arrow keys), or the review sits in a hidden tab panel.
+      if (event.defaultPrevented || root.current?.closest("[hidden]")) return;
       if (isTyping(event.target)) return;
       const key = event.key.toLowerCase();
       if (event.key === "ArrowLeft") step(-1);
@@ -144,7 +147,7 @@ export function FileReview({ run, onChanged }: { run: RunRecord; onChanged: () =
   const decided = paths.filter((p) => marks[p]?.decision).length;
 
   return (
-    <section className="rounded-lg border border-zinc-200 dark:border-zinc-800">
+    <section ref={root} className="rounded-lg border border-zinc-200 dark:border-zinc-800">
       {error && <p className="px-4 py-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
       {!error && files === null && (
         <p className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">Loading diff...</p>

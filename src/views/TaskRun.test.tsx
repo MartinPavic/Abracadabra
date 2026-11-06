@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { listen } from "@tauri-apps/api/event";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cancelRun, deleteRun, getRun, openInIde, type RunRecord, type RunStatus } from "../lib/api";
 import { useConfig } from "../lib/useConfig";
@@ -32,8 +33,8 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-async function renderRun(status: RunStatus, extra: Partial<RunRecord> = {}) {
-  vi.mocked(getRun).mockResolvedValue({
+function makeRun(status: RunStatus, extra: Partial<RunRecord> = {}): RunRecord {
+  return {
     id: "r1",
     taskId: "1",
     taskTitle: "Fix login bug",
@@ -47,17 +48,38 @@ async function renderRun(status: RunStatus, extra: Partial<RunRecord> = {}) {
     planOnly: false,
     removedFiles: [],
     ...extra,
-  } as unknown as RunRecord);
+  } as unknown as RunRecord;
+}
+
+function renderAt(path: string) {
   render(
-    <MemoryRouter initialEntries={["/tasks/r1"]}>
+    <MemoryRouter initialEntries={[path]}>
+      <Link to="/tasks/r2">other run</Link>
       <Routes>
         <Route path="/tasks/:id" element={<TaskRun />} />
         <Route path="/tasks" element={<p>task list</p>} />
       </Routes>
     </MemoryRouter>,
   );
+}
+
+async function renderRun(status: RunStatus, extra: Partial<RunRecord> = {}) {
+  vi.mocked(getRun).mockResolvedValue(makeRun(status, extra));
+  renderAt("/tasks/r1");
   await screen.findByText("Fix login bug");
 }
+
+/** Delivers a `run://status` event for r1, after which the page reloads the run as `status`. */
+async function changeStatus(status: RunStatus, extra: Partial<RunRecord> = {}) {
+  vi.mocked(getRun).mockResolvedValue(makeRun(status, extra));
+  const calls = vi.mocked(listen).mock.calls;
+  const handler = calls[calls.length - 1][1] as (event: { payload: { runId: string } }) => void;
+  await act(async () => handler({ payload: { runId: "r1" } }));
+}
+
+const tab = (name: RegExp) => screen.getByRole("tab", { name });
+const selectedTab = () => screen.getByRole("tab", { selected: true });
+const panel = (id: string) => document.getElementById(`run-panel-${id}`) as HTMLElement;
 
 describe("TaskRun buttons per status", () => {
   it("queued: can be cancelled and says what it waits for", async () => {
@@ -70,14 +92,14 @@ describe("TaskRun buttons per status", () => {
   it("working: can be cancelled, has no approval or delete buttons", async () => {
     await renderRun("working");
     expect(screen.getByRole("button", { name: "Cancel run" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Delete run" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete run", hidden: true })).toBeNull();
   });
 
   it("awaiting approval: shows the file review instead of the diff, no cancel", async () => {
     await renderRun("awaiting_approval");
     expect(screen.getByTestId("file-review")).toBeTruthy();
     expect(screen.queryByTestId("diff")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Cancel run" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel run", hidden: true })).toBeNull();
   });
 
   it("approved: shows the publish actions and the diff, not the file review", async () => {
@@ -105,6 +127,7 @@ describe("TaskRun buttons per status", () => {
   it("failed: shows the error and deletes only after confirmation", async () => {
     await renderRun("failed", { error: "agent crashed" });
     expect(screen.getByText("agent crashed")).toBeTruthy();
+    fireEvent.click(tab(/Activity/));
     fireEvent.click(screen.getByRole("button", { name: "Delete run" }));
     expect(deleteRun).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Delete run" }));
@@ -121,5 +144,112 @@ describe("TaskRun buttons per status", () => {
     await renderRun("awaiting_approval", { workDir: "/tmp/p", branch: "feat/x" } as Partial<RunRecord>);
     fireEvent.click(screen.getByRole("button", { name: "Open in editor" }));
     await waitFor(() => expect(openInIde).toHaveBeenCalledWith("r1"));
+  });
+});
+
+describe("TaskRun tabs", () => {
+  it("an awaiting-approval run opens on the changes tab", async () => {
+    await renderRun("awaiting_approval");
+    expect(screen.getByRole("tablist", { name: "Run sections" })).toBeTruthy();
+    expect(selectedTab().id).toBe("run-tab-changes");
+    expect(screen.getByRole("tab", { name: "Changes needs attention" })).toBe(selectedTab());
+    expect(panel("changes").hidden).toBe(false);
+    expect(panel("changes").contains(screen.getByTestId("file-review"))).toBe(true);
+    expect(panel("overview").hidden).toBe(true);
+  });
+
+  it("a finished run opens on overview", async () => {
+    await renderRun("approved");
+    expect(selectedTab().id).toBe("run-tab-overview");
+    expect(tab(/Changes/).textContent).not.toContain("needs attention");
+    expect(panel("overview").contains(screen.getByTestId("publish"))).toBe(true);
+    expect(panel("changes").contains(screen.getByTestId("diff"))).toBe(true);
+  });
+
+  it("a plan run opens on overview", async () => {
+    await renderRun("working", { planOnly: true });
+    expect(selectedTab().id).toBe("run-tab-overview");
+    expect(screen.queryByTestId("diff")).toBeNull();
+    expect(within(panel("changes")).getByText("No changes to show yet.")).toBeTruthy();
+  });
+
+  it("the default tab follows a status change until the user picks a tab", async () => {
+    await renderRun("queued");
+    expect(selectedTab().id).toBe("run-tab-overview");
+    expect(screen.getByRole("tab", { name: "Activity active" })).toBeTruthy();
+
+    await changeStatus("working");
+    expect(selectedTab().id).toBe("run-tab-changes");
+    expect(within(panel("changes")).getByTestId("diff")).toBeTruthy();
+
+    await changeStatus("failed");
+    expect(selectedTab().id).toBe("run-tab-overview");
+    expect(tab(/Activity/).textContent).not.toContain("active");
+  });
+
+  it("choosing a tab is not overridden by later status changes", async () => {
+    await renderRun("working");
+    expect(selectedTab().id).toBe("run-tab-changes");
+    fireEvent.click(tab(/Overview/));
+    expect(selectedTab().id).toBe("run-tab-overview");
+
+    await changeStatus("awaiting_approval");
+    expect(selectedTab().id).toBe("run-tab-overview");
+
+    // Picking the tab that is already the default still counts as a choice.
+    fireEvent.click(tab(/Changes/));
+    await changeStatus("approved");
+    expect(selectedTab().id).toBe("run-tab-changes");
+  });
+
+  it("switching tabs keeps the changes panel mounted", async () => {
+    await renderRun("awaiting_approval");
+    const review = screen.getByTestId("file-review");
+    fireEvent.click(tab(/Overview/));
+    expect(panel("changes").hidden).toBe(true);
+    expect(screen.getByTestId("file-review")).toBe(review);
+    fireEvent.click(tab(/Changes/));
+    expect(panel("changes").hidden).toBe(false);
+    expect(screen.getByTestId("file-review")).toBe(review);
+  });
+
+  it("overview holds the worker summary and reviewer notes", async () => {
+    await renderRun("awaiting_approval", {
+      workerSummary: "Rewrote the login form.",
+      reviewNotes: "Rename the helper.",
+      reviewVerdict: "changes",
+    } as Partial<RunRecord>);
+    const overview = within(panel("overview"));
+    expect(overview.getByText("Rewrote the login form.")).toBeTruthy();
+    expect(overview.getByText("Rename the helper.")).toBeTruthy();
+    expect(overview.getByText("changes requested")).toBeTruthy();
+    const apply = overview.getByRole("button", { name: "Apply suggestions", hidden: true }) as HTMLButtonElement;
+    expect(apply.disabled).toBe(false);
+    expect(within(panel("changes")).queryByText("Rewrote the login form.")).toBeNull();
+  });
+
+  it("activity holds the console and delete run", async () => {
+    await renderRun("failed");
+    const activity = within(panel("activity"));
+    expect(activity.getByTestId("console")).toBeTruthy();
+    expect(activity.getByText("Worker")).toBeTruthy();
+    expect(activity.getByRole("button", { name: "Delete run", hidden: true })).toBeTruthy();
+    expect(within(panel("overview")).queryByRole("button", { name: "Delete run", hidden: true })).toBeNull();
+  });
+
+  it("opening another run resets the default tab", async () => {
+    vi.mocked(getRun).mockImplementation(async (id: string) =>
+      id === "r2"
+        ? makeRun("awaiting_approval", { id: "r2", taskTitle: "Second task" })
+        : makeRun("awaiting_approval"),
+    );
+    renderAt("/tasks/r1");
+    await screen.findByText("Fix login bug");
+    fireEvent.click(tab(/Overview/));
+    expect(selectedTab().id).toBe("run-tab-overview");
+
+    fireEvent.click(screen.getByText("other run"));
+    await screen.findByText("Second task");
+    expect(selectedTab().id).toBe("run-tab-changes");
   });
 });

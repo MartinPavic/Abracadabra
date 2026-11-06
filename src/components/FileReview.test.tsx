@@ -103,6 +103,33 @@ describe("FileReview", () => {
     await expectFile("b.ts", 2, 3);
   });
 
+  it("keys do nothing while the review is in a hidden panel or were already handled", async () => {
+    vi.mocked(getRunDiff).mockResolvedValue(threeFiles);
+    const { rerender } = render(
+      <div hidden>
+        <FileReview run={run} onChanged={() => {}} />
+      </div>,
+    );
+    await screen.findByText("File 1 of 3");
+    fireEvent.keyDown(window, { key: "y" });
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(setFileDecisions).not.toHaveBeenCalled();
+    screen.getByText("File 1 of 3");
+
+    rerender(
+      <div>
+        <FileReview run={run} onChanged={() => {}} />
+      </div>,
+    );
+    const handled = new KeyboardEvent("keydown", { key: "y", cancelable: true });
+    handled.preventDefault();
+    fireEvent(window, handled);
+    expect(setFileDecisions).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: "y" });
+    await expectFile("b.ts", 2, 3);
+  });
+
   it("clicking a file in the summary goes back to it", async () => {
     await renderWith(threeFiles);
     fireEvent.click(button("Accept all remaining"));
