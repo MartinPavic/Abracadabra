@@ -75,8 +75,13 @@ export function RunHeader({
                 {run.testResult.passed ? "tests passed" : "tests failed"}
               </Badge>
             )}
+            {run.reviewVerdict && (
+              <Badge tone={run.reviewVerdict === "approve" ? "success" : "danger"}>
+                {run.reviewVerdict === "approve" ? "review approved" : "review: changes requested"}
+              </Badge>
+            )}
           </div>
-          <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-1 break-words text-xs text-zinc-500 dark:text-zinc-400">
             {run.project}
             {run.branch ? ` \u00b7 ${run.branch}` : ""}
             {run.baseRef && run.baseCommit

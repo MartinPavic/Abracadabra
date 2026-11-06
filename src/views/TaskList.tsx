@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ReadyBanner } from "../components/ReadyBanner";
 import { RunStatusPill } from "../components/RunStatus";
-import { Badge, Button, Card, EmptyState, Icon, Input, Notice, Select, type Tone } from "../components/ui";
+import { Badge, Button, Card, checkboxClass, EmptyState, Icon, Input, Notice, Select, type Tone } from "../components/ui";
 import {
   describeError,
   listRuns,
@@ -46,10 +46,6 @@ function loadFilters(sourceId: string): SavedFilters | null {
 }
 
 const statusTone: Record<string, Tone> = { opened: "success", open: "success", closed: "neutral" };
-
-// No checkbox primitive; the focus outline (rather than a ring) is drawn on native checkboxes too.
-const checkboxClass =
-  "size-4 shrink-0 rounded accent-accent-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500 dark:accent-accent-400";
 
 /** GitLab calls the open state "opened"; show it as "open". */
 const statusLabel = (status: string) => (status === "opened" ? "open" : status);

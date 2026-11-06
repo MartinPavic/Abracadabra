@@ -6,6 +6,11 @@ export const controlClasses =
   "focus-visible:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-accent-500 " +
   "disabled:cursor-not-allowed disabled:opacity-50";
 
+// The focus outline (rather than a ring) is what shows on native checkboxes.
+export const checkboxClass =
+  "size-4 shrink-0 rounded accent-accent-600 focus-visible:outline-2 focus-visible:outline-offset-2 " +
+  "focus-visible:outline-accent-500 dark:accent-accent-400";
+
 function join(...parts: (string | false | undefined)[]): string {
   return parts.filter(Boolean).join(" ");
 }

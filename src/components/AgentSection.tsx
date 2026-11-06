@@ -20,7 +20,7 @@ const tileClass = (selected: boolean) =>
 
 function SelectedMark() {
   return (
-    <span className="absolute top-2 right-2 flex size-5 items-center justify-center rounded-full bg-accent-600 text-white dark:bg-accent-500 dark:text-zinc-950">
+    <span className="absolute top-2 right-2 flex size-5 items-center justify-center rounded-full bg-accent-600 text-white dark:bg-accent-400 dark:text-zinc-950">
       <Icon name="check" className="size-3.5" />
     </span>
   );

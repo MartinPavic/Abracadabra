@@ -1,9 +1,6 @@
 import { useState } from "react";
 import type { AppConfig } from "../lib/api";
-import { Button, Card, Field, Input, Notice, Textarea } from "./ui";
-
-const checkboxClass =
-  "size-4 shrink-0 rounded accent-accent-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:accent-accent-500";
+import { Button, Card, checkboxClass, Field, Input, Notice, Textarea } from "./ui";
 
 /** Global branch, commit and merge-request description templates. */
 export function TemplatesSection({

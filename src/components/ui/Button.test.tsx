@@ -23,7 +23,7 @@ describe("Button", () => {
       expect(c).toContain("disabled:opacity-50");
     }
     expect(buttonClasses("primary")).toContain("bg-accent-600");
-    expect(buttonClasses("primary")).toContain("dark:bg-accent-500");
+    expect(buttonClasses("primary")).toContain("dark:bg-accent-400");
     expect(buttonClasses("danger")).toContain("bg-red-600");
     expect(buttonClasses("secondary", "sm")).toContain("h-8");
   });

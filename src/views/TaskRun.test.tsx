@@ -195,6 +195,50 @@ describe("TaskRun tabs", () => {
     expect(tab(/Activity/).textContent).not.toContain("active");
   });
 
+  it("committing keeps the changes tab, so the default does not flip between reviewing and awaiting approval", async () => {
+    await renderRun("reviewing");
+    expect(selectedTab().id).toBe("run-tab-changes");
+    await changeStatus("committing");
+    expect(selectedTab().id).toBe("run-tab-changes");
+    await changeStatus("awaiting_approval");
+    expect(selectedTab().id).toBe("run-tab-changes");
+  });
+
+  it("flags the overview tab when it holds a notice the user must see", async () => {
+    await renderRun("awaiting_approval");
+    expect(tab(/Overview/).textContent).not.toContain("needs attention");
+    cleanup();
+
+    await renderRun("awaiting_approval", { removedFiles: ["a.ts"] } as Partial<RunRecord>);
+    expect(selectedTab().id).toBe("run-tab-changes");
+    expect(screen.getByRole("tab", { name: "Overview needs attention" })).toBeTruthy();
+    cleanup();
+
+    await renderRun("awaiting_approval", { redoError: "boom" } as Partial<RunRecord>);
+    expect(screen.getByRole("tab", { name: "Overview needs attention" })).toBeTruthy();
+    cleanup();
+
+    vi.mocked(useConfig).mockReturnValue({ config: { reviewerGate: "on", gitSources: [] } } as never);
+    await renderRun("awaiting_approval", { reviewVerdict: "changes" } as Partial<RunRecord>);
+    expect(screen.getByRole("tab", { name: "Overview needs attention" })).toBeTruthy();
+    cleanup();
+
+    await renderRun("failed", { error: "agent crashed" });
+    expect(screen.getByRole("tab", { name: "Overview needs attention" })).toBeTruthy();
+  });
+
+  it("does not flag overview for a reviewer verdict when the reviewer gate is off", async () => {
+    vi.mocked(useConfig).mockReturnValue({ config: { reviewerGate: "off", gitSources: [] } } as never);
+    await renderRun("awaiting_approval", { reviewVerdict: "changes" } as Partial<RunRecord>);
+    expect(tab(/Overview/).textContent).not.toContain("needs attention");
+  });
+
+  it("shows the reviewer verdict in the header", async () => {
+    await renderRun("awaiting_approval", { reviewVerdict: "changes" } as Partial<RunRecord>);
+    const header = document.querySelector("header") as HTMLElement;
+    expect(within(header).getByText("review: changes requested")).toBeTruthy();
+  });
+
   it("choosing a tab is not overridden by later status changes", async () => {
     await renderRun("working");
     expect(selectedTab().id).toBe("run-tab-changes");

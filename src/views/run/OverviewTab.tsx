@@ -15,6 +15,22 @@ import {
   type RunRecord,
 } from "../../lib/api";
 
+function reviewerAskedForChanges(run: RunRecord, config: AppConfig | null): boolean {
+  return (
+    run.reviewVerdict === "changes" && run.status === "awaiting_approval" && config?.reviewerGate !== "off"
+  );
+}
+
+/** True when Overview shows a warning the user must not miss; keeps the tab indicator in sync. */
+export function overviewNeedsAttention(run: RunRecord, config: AppConfig | null): boolean {
+  return (
+    Boolean(run.error) ||
+    reviewerAskedForChanges(run, config) ||
+    Boolean(run.redoError && run.status === "awaiting_approval") ||
+    run.removedFiles.length > 0
+  );
+}
+
 export function OverviewTab({
   run,
   config,
@@ -89,13 +105,11 @@ export function OverviewTab({
 
       {run.error && <Notice tone="danger">{run.error}</Notice>}
 
-      {run.reviewVerdict === "changes" &&
-        run.status === "awaiting_approval" &&
-        config?.reviewerGate !== "off" && (
-          <Notice tone="danger">
-            The reviewer asked for changes. Use &quot;Apply suggestions&quot; below, or redo the run.
-          </Notice>
-        )}
+      {reviewerAskedForChanges(run, config) && (
+        <Notice tone="danger">
+          The reviewer asked for changes. Use &quot;Apply suggestions&quot; below, or redo the run.
+        </Notice>
+      )}
 
       {run.redoError && run.status === "awaiting_approval" && (
         <Notice tone="warning">

@@ -6,14 +6,17 @@ import { useConfig } from "../lib/useConfig";
 import { describeError, getRun, isCancellable, type RunRecord } from "../lib/api";
 import { ActivityTab } from "./run/ActivityTab";
 import { ChangesTab } from "./run/ChangesTab";
-import { OverviewTab } from "./run/OverviewTab";
+import { OverviewTab, overviewNeedsAttention } from "./run/OverviewTab";
 import { RunHeader } from "./run/RunHeader";
 
 type RunTab = "overview" | "changes" | "activity";
 
 function defaultTab(run: RunRecord): RunTab {
   const hasChanges =
-    run.status === "awaiting_approval" || run.status === "working" || run.status === "reviewing";
+    run.status === "awaiting_approval" ||
+    run.status === "working" ||
+    run.status === "reviewing" ||
+    run.status === "committing";
   return hasChanges && !run.planOnly ? "changes" : "overview";
 }
 
@@ -81,7 +84,7 @@ export function TaskRun() {
 
   const tab = chosenTab ?? defaultTab(run);
   const tabs: TabDef<RunTab>[] = [
-    { id: "overview", label: "Overview" },
+    { id: "overview", label: "Overview", indicator: overviewNeedsAttention(run, config) ? "dot" : null },
     {
       id: "changes",
       label: "Changes",
