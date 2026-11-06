@@ -116,6 +116,30 @@ describe("Settings", () => {
     }
   });
 
+  it("settings sections are cards with headings", async () => {
+    localStorage.setItem(ADVANCED_KEY, "1");
+    await renderSettings();
+    const headings = [
+      "Git sources",
+      "Agent",
+      "Agent instructions",
+      "Branches",
+      "Agent commands",
+      "Templates",
+      "Project overrides",
+      "Project checkouts",
+    ];
+    const sections = headings.map((name) => {
+      const heading = screen.getByRole("heading", { name });
+      const section = heading.closest("section");
+      expect(section, name).not.toBeNull();
+      // The title sits in the card's header, not in its body.
+      expect(heading.closest("header")?.parentElement, name).toBe(section);
+      return section;
+    });
+    expect(new Set(sections).size).toBe(headings.length);
+  });
+
   it("the advanced state is remembered", async () => {
     const first = await renderSettings();
     const details = advanced();

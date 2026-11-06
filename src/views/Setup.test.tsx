@@ -368,6 +368,26 @@ describe("Setup", () => {
     expect(screen.getByText("Work")).toBeTruthy();
   });
 
+  it("the setup wizard shows which step you are on", async () => {
+    renderRoutes();
+    await screen.findByText(/Step 1 of 3/);
+    const bar = () => screen.getByRole("progressbar", { name: "Setup progress" });
+    expect(bar().getAttribute("aria-valuemin")).toBe("1");
+    expect(bar().getAttribute("aria-valuemax")).toBe("3");
+    expect(bar().getAttribute("aria-valuenow")).toBe("1");
+    expect(screen.getByRole("heading", { name: "Connect a git source" })).toBeTruthy();
+
+    await connect();
+    expect(bar().getAttribute("aria-valuenow")).toBe("2");
+    expect(screen.getByRole("heading", { name: "Choose your coding agent" })).toBeTruthy();
+    await screen.findByRole("button", { name: /Claude Code/ });
+
+    fireEvent.click(continueButton());
+    await screen.findByText(/Step 3 of 3/);
+    expect(bar().getAttribute("aria-valuenow")).toBe("3");
+    expect(screen.getByRole("heading", { name: "All set" })).toBeTruthy();
+  });
+
   it("without existing sources there is no way past step 1 except a passing test", async () => {
     renderRoutes();
     await screen.findByText(/Step 1 of 3/);

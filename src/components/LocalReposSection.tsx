@@ -1,11 +1,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
 import type { AppConfig } from "../lib/api";
-
-const inputClass =
-  "w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
-const buttonClass =
-  "rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900";
+import { Button, Card, Input, Notice } from "./ui";
 
 /** Maps project paths (e.g. group/project) to the user's local checkouts where runs do their work. */
 export function LocalReposSection({
@@ -48,72 +44,74 @@ export function LocalReposSection({
   }
 
   return (
-    <section className="flex flex-col gap-3">
-      <div>
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          Project checkouts
-        </h2>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+    <Card
+      title="Project checkouts"
+      description={
+        <>
           Without an entry the app works in its own clone of the project; add an entry to run in
-          your own checkout instead.
-        </p>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          your own checkout instead.{" "}
           Where each project's work gets done. A run stashes your uncommitted changes, works on a new
           branch in this folder and leaves it on that branch for review; projects without a folder
           are cloned into the app's data folder. One run at a time per project.
-        </p>
-      </div>
-
-      {entries.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {entries.map(([projectPath, localPath]) => (
-            <li
-              key={projectPath}
-              className="flex items-center justify-between rounded-lg border border-zinc-200 px-4 py-2 dark:border-zinc-800"
-            >
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                  {projectPath}
-                </div>
-                <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">{localPath}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleRemove(projectPath)}
-                className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {entries.length > 0 && (
+          <ul className="flex flex-col gap-2">
+            {entries.map(([projectPath, localPath]) => (
+              <li
+                key={projectPath}
+                className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-800"
               >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                    {projectPath}
+                  </div>
+                  <div className="truncate font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                    {localPath}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon="trash"
+                  className="shrink-0"
+                  onClick={() => handleRemove(projectPath)}
+                >
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
 
-      <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-        <input
-          className={inputClass}
-          placeholder="Project path, e.g. group/project"
-          value={project}
-          onChange={(e) => setProject(e.target.value)}
-        />
-        <div className="flex gap-2">
-          <input
-            className={inputClass}
-            placeholder="/absolute/path/to/local/checkout"
-            value={folder}
-            onChange={(e) => setFolder(e.target.value)}
+        <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+          <Input
+            mono
+            placeholder="Project path, e.g. group/project"
+            value={project}
+            onChange={(e) => setProject(e.target.value)}
           />
-          <button type="button" onClick={browse} className={buttonClass}>
-            Browse...
-          </button>
+          <div className="flex gap-2">
+            <Input
+              mono
+              placeholder="/absolute/path/to/local/checkout"
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+            />
+            <Button icon="folder" className="shrink-0" onClick={browse}>
+              Browse...
+            </Button>
+          </div>
+          <div>
+            <Button variant="primary" disabled={!canAdd} onClick={handleAdd}>
+              Add folder
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button type="button" disabled={!canAdd} onClick={handleAdd} className={buttonClass}>
-            Add folder
-          </button>
-          {error && <span className="text-sm text-red-600 dark:text-red-400">{error}</span>}
-        </div>
+        {error && <Notice tone="danger">{error}</Notice>}
       </div>
-    </section>
+    </Card>
   );
 }

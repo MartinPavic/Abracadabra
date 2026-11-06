@@ -7,17 +7,24 @@ import {
   testAgentCommand,
 } from "../lib/api";
 import { agentPresets, applyPreset, inferPreset, type PresetId } from "../lib/agentPresets";
+import { Badge, Button, Card, Icon, Notice } from "./ui";
 
 const OUTPUT_TAIL_CHARS = 1000;
 
-const cardClass = (selected: boolean) =>
-  `flex flex-col gap-0.5 rounded-md border px-3 py-2 text-left text-sm ${
+const tileClass = (selected: boolean) =>
+  `relative flex min-w-0 flex-col items-start gap-1.5 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 ${
     selected
-      ? "border-zinc-900 bg-zinc-100 dark:border-zinc-100 dark:bg-zinc-900"
-      : "border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-900"
+      ? "border-accent-500 bg-accent-50 dark:border-accent-400 dark:bg-accent-950/40"
+      : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/50"
   }`;
-const smallButtonClass =
-  "rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900";
+
+function SelectedMark() {
+  return (
+    <span className="absolute top-2 right-2 flex size-5 items-center justify-center rounded-full bg-accent-600 text-white dark:bg-accent-500 dark:text-zinc-950">
+      <Icon name="check" className="size-3.5" />
+    </span>
+  );
+}
 
 /** Picks which coding agent CLI runs use, and checks that its command works. */
 export function AgentSection({
@@ -84,77 +91,84 @@ export function AgentSection({
   const output = testResult?.output.trim() ?? "";
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Agent</h2>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {agentPresets.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            aria-pressed={preset === item.id}
-            className={cardClass(preset === item.id)}
-            onClick={() => choose(item.id)}
-          >
-            <span className="font-medium text-zinc-900 dark:text-zinc-100">{item.label}</span>
-            {detected && (
+    <Card title="Agent">
+      <div className="flex flex-col gap-4">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {agentPresets.map((item) => {
+            const selected = preset === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={selected}
+                className={tileClass(selected)}
+                onClick={() => choose(item.id)}
+              >
+                <span className="truncate pr-6 font-medium text-zinc-900 dark:text-zinc-100">
+                  {item.label}
+                </span>
+                {detected && (
+                  <Badge tone={detected.has(item.id) ? "success" : "neutral"}>
+                    {detected.has(item.id) ? "Detected" : "Not found on PATH"}
+                  </Badge>
+                )}
+                {selected && <SelectedMark />}
+              </button>
+            );
+          })}
+          {isCustom && (
+            <div className={tileClass(true)}>
+              <span className="pr-6 font-medium text-zinc-900 dark:text-zinc-100">Custom</span>
               <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {detected.has(item.id) ? "Detected" : "Not found on PATH"}
+                Edit the commands under Advanced
               </span>
-            )}
-          </button>
-        ))}
-        {isCustom && (
-          <div className={cardClass(true)}>
-            <span className="font-medium text-zinc-900 dark:text-zinc-100">Custom</span>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">
-              Edit the commands under Advanced
-            </span>
-          </div>
-        )}
-      </div>
-      {pending && (
-        <div className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-          <span>Replace your edited commands?</span>
-          <button type="button" className={smallButtonClass} onClick={() => void apply(pending)}>
-            Replace
-          </button>
-          <button type="button" className={smallButtonClass} onClick={() => setPending(null)}>
-            Cancel
-          </button>
-        </div>
-      )}
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className={smallButtonClass}
-            disabled={testing || agent.workerCmd.trim() === ""}
-            onClick={handleTest}
-            title="Runs the worker command once with the prompt “Reply with the single word OK”"
-          >
-            {testing ? "Testing (up to 2 min)..." : "Test agent"}
-          </button>
-          {testResult && (
-            <span
-              className={`text-xs font-medium ${
-                testResult.ok ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"
-              }`}
-            >
-              {testResult.ok ? "OK" : testResult.timedOut ? "Timed out" : "Failed"}
-            </span>
+              <SelectedMark />
+            </div>
           )}
         </div>
-        {testError && <p className="text-xs text-red-600 dark:text-red-400">{testError}</p>}
-        {testResult?.error && (
-          <p className="text-xs text-red-600 dark:text-red-400">{testResult.error}</p>
+        {pending && (
+          <Notice
+            tone="warning"
+            actions={
+              <>
+                <Button size="sm" variant="primary" onClick={() => void apply(pending)}>
+                  Replace
+                </Button>
+                <Button size="sm" onClick={() => setPending(null)}>
+                  Cancel
+                </Button>
+              </>
+            }
+          >
+            Replace your edited commands?
+          </Notice>
         )}
-        {output !== "" && (
-          <pre className="max-h-40 overflow-auto rounded-md bg-zinc-100 p-2 font-mono text-xs whitespace-pre-wrap text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-            {output.slice(-OUTPUT_TAIL_CHARS)}
-          </pre>
-        )}
+        {error && <Notice tone="danger">{error}</Notice>}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              disabled={testing || agent.workerCmd.trim() === ""}
+              onClick={handleTest}
+              title="Runs the worker command once with the prompt “Reply with the single word OK”"
+            >
+              {testing ? "Testing (up to 2 min)..." : "Test agent"}
+            </Button>
+            {testResult && (
+              <Badge tone={testResult.ok ? "success" : testResult.timedOut ? "warning" : "danger"} dot>
+                {testResult.ok ? "OK" : testResult.timedOut ? "Timed out" : "Failed"}
+              </Badge>
+            )}
+          </div>
+          {testError && <Notice tone="danger">{testError}</Notice>}
+          {testResult?.error && <Notice tone="danger">{testResult.error}</Notice>}
+          {output !== "" && (
+            <pre className="max-h-40 overflow-auto rounded-lg border border-zinc-200 bg-zinc-50 p-2 font-mono text-xs whitespace-pre-wrap break-all text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+              {output.slice(-OUTPUT_TAIL_CHARS)}
+            </pre>
+          )}
+        </div>
       </div>
-    </section>
+    </Card>
   );
 }

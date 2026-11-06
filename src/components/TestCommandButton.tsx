@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { type AgentTestResult, testAgentCommand } from "../lib/api";
+import { Badge, Button, Notice } from "./ui";
 
 /** Tries an agent command once with a trivial prompt and shows what it printed. */
 export function TestCommandButton({
@@ -27,31 +28,26 @@ export function TestCommandButton({
   }
 
   return (
-    <div className="mt-1 flex flex-col gap-1">
+    <div className="mt-1.5 flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
-        <button
-          type="button"
+        <Button
+          size="sm"
           disabled={running || command.trim() === ""}
           onClick={handleTest}
           title="Runs this command once with the prompt “Reply with the single word OK”"
-          className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
         >
           {running ? "Testing (up to 2 min)..." : "Test command"}
-        </button>
+        </Button>
         {result && (
-          <span
-            className={`text-xs font-medium ${
-              result.ok ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"
-            }`}
-          >
+          <Badge tone={result.ok ? "success" : result.timedOut ? "warning" : "danger"} dot>
             {result.ok ? "Works" : result.timedOut ? "Timed out" : "Failed"}
-          </span>
+          </Badge>
         )}
       </div>
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-      {result?.error && <p className="text-xs text-red-600 dark:text-red-400">{result.error}</p>}
+      {error && <Notice tone="danger">{error}</Notice>}
+      {result?.error && <Notice tone="danger">{result.error}</Notice>}
       {result && result.output.trim() !== "" && (
-        <pre className="max-h-40 overflow-auto rounded-md bg-zinc-100 p-2 font-mono text-xs whitespace-pre-wrap text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+        <pre className="max-h-40 overflow-auto rounded-lg border border-zinc-200 bg-zinc-50 p-2 font-mono text-xs whitespace-pre-wrap break-all text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
           {result.output}
         </pre>
       )}

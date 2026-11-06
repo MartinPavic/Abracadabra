@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AgentSection } from "../components/AgentSection";
 import { SETUP_SKIPPED_KEY } from "../components/FirstRunGate";
+import { Badge, Button, Card, Field, Input, Notice, Select } from "../components/ui";
 import {
   type AppConfig,
   describeError,
@@ -45,14 +46,6 @@ type TestState =
   | { status: "testing" | "success"; key: string }
   | { status: "error"; key: string; message: string };
 
-const inputClass =
-  "w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
-const labelClass = "mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400";
-const secondaryButtonClass =
-  "rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900";
-const primaryButtonClass =
-  "rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300";
-
 function hostOf(url: string): string | undefined {
   try {
     return new URL(url.trim()).host;
@@ -88,9 +81,9 @@ export function Setup() {
   }
 
   const skipButton = (
-    <button type="button" className={secondaryButtonClass} onClick={skip}>
+    <Button variant="ghost" onClick={skip}>
       I'll set it up myself
-    </button>
+    </Button>
   );
 
   if (loading) {
@@ -99,11 +92,10 @@ export function Setup() {
 
   if (error || !config) {
     return (
-      <div className="flex flex-col items-start gap-3">
-        <p className="text-sm text-red-600 dark:text-red-400">
+      <div className="mx-auto w-full max-w-xl">
+        <Notice tone="danger" actions={skipButton}>
           Failed to load settings: {error ?? "unknown error"}
-        </p>
-        {skipButton}
+        </Notice>
       </div>
     );
   }
@@ -178,125 +170,131 @@ export function Setup() {
     : config.gitSources.map((source) => source.name).join(", ") || "None";
 
   return (
-    <div className="flex max-w-xl flex-col gap-6">
-      <div>
-        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          Step {step} of 3 &middot; {stepTitles[step]}
-        </p>
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-          {stepTitles[step]}
-        </h1>
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-4 py-4">
+      <StepProgress step={step} />
+      <Card title={stepTitles[step]}>
+        {step === 1 && (
+          <form onSubmit={handleConnect} className="flex flex-col gap-4">
+            <Field label="Provider" htmlFor="setup-provider">
+              <Select
+                id="setup-provider"
+                value={values.provider}
+                onChange={(e) => changeProvider(e.target.value as GitProvider)}
+              >
+                <option value="gitlab">GitLab</option>
+                <option value="github">GitHub</option>
+              </Select>
+            </Field>
+
+            <Field
+              label="Base URL"
+              htmlFor="setup-base-url"
+              hint={name !== "" ? `Saved as “${name}”.` : undefined}
+            >
+              <Input
+                id="setup-base-url"
+                aria-describedby={name !== "" ? "setup-base-url-hint" : undefined}
+                value={values.baseUrl}
+                onChange={(e) => {
+                  setUrlEdited(true);
+                  setValues((prev) => ({ ...prev, baseUrl: e.target.value }));
+                }}
+              />
+            </Field>
+
+            <Field label="Access token" htmlFor="setup-token" hint={scopeHints[values.provider]}>
+              <Input
+                id="setup-token"
+                type="password"
+                mono
+                aria-describedby="setup-token-hint"
+                value={values.token}
+                onChange={(e) => setValues((prev) => ({ ...prev, token: e.target.value }))}
+                placeholder={values.provider === "github" ? "ghp_... or github_pat_..." : "glpat-..."}
+              />
+            </Field>
+
+            <div className="flex items-center gap-3">
+              <Button disabled={!canTest} onClick={handleTest}>
+                {current.status === "testing" ? "Testing..." : "Test connection"}
+              </Button>
+              {current.status === "success" && (
+                <Badge tone="success" dot>
+                  Connected
+                </Badge>
+              )}
+            </div>
+            {current.status === "error" && <Notice tone="danger">{current.message}</Notice>}
+
+            {saveError && <Notice tone="danger">{saveError}</Notice>}
+
+            <Footer skip={skipButton}>
+              {canKeepSources && <Button onClick={() => setStep(2)}>Keep my existing sources</Button>}
+              <Button type="submit" variant="primary" disabled={!canContinue}>
+                {saving ? "Saving..." : "Continue"}
+              </Button>
+            </Footer>
+          </form>
+        )}
+
+        {step === 2 && (
+          <AgentStep
+            config={config}
+            onChange={update}
+            skip={skipButton}
+            onBack={() => setStep(1)}
+            onContinue={() => setStep(3)}
+          />
+        )}
+
+        {step === 3 && (
+          <div className="flex flex-col gap-4">
+            <dl className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm dark:divide-zinc-800 dark:border-zinc-800">
+              <div className="flex gap-4 px-3 py-2">
+                <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Git source</dt>
+                <dd className="min-w-0 break-words text-zinc-900 dark:text-zinc-100">{sourceSummary}</dd>
+              </div>
+              <div className="flex gap-4 px-3 py-2">
+                <dt className="w-24 shrink-0 text-zinc-500 dark:text-zinc-400">Agent</dt>
+                <dd className="min-w-0 break-words text-zinc-900 dark:text-zinc-100">{agentSummary}</dd>
+              </div>
+            </dl>
+            <Footer skip={skipButton} onBack={() => setStep(2)}>
+              <Button variant="primary" onClick={() => navigate("/tasks")}>
+                Go to tasks
+              </Button>
+            </Footer>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function StepProgress({ step }: { step: Step }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+        Step {step} of 3
+      </p>
+      <div
+        role="progressbar"
+        aria-label="Setup progress"
+        aria-valuemin={1}
+        aria-valuemax={3}
+        aria-valuenow={step}
+        aria-valuetext={`Step ${step} of 3: ${stepTitles[step]}`}
+        className="flex gap-1.5"
+      >
+        {([1, 2, 3] as const).map((n) => (
+          <div
+            key={n}
+            className={`h-1.5 flex-1 rounded-full ${
+              n <= step ? "bg-accent-600 dark:bg-accent-500" : "bg-zinc-200 dark:bg-zinc-800"
+            }`}
+          />
+        ))}
       </div>
-
-      {step === 1 && (
-        <form onSubmit={handleConnect} className="flex flex-col gap-4">
-          <div>
-            <label className={labelClass} htmlFor="setup-provider">
-              Provider
-            </label>
-            <select
-              id="setup-provider"
-              className={inputClass}
-              value={values.provider}
-              onChange={(e) => changeProvider(e.target.value as GitProvider)}
-            >
-              <option value="gitlab">GitLab</option>
-              <option value="github">GitHub</option>
-            </select>
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="setup-base-url">
-              Base URL
-            </label>
-            <input
-              id="setup-base-url"
-              className={inputClass}
-              value={values.baseUrl}
-              onChange={(e) => {
-                setUrlEdited(true);
-                setValues((prev) => ({ ...prev, baseUrl: e.target.value }));
-              }}
-            />
-            {name !== "" && (
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Saved as “{name}”.</p>
-            )}
-          </div>
-
-          <div>
-            <label className={labelClass} htmlFor="setup-token">
-              Access token
-            </label>
-            <input
-              id="setup-token"
-              type="password"
-              className={inputClass}
-              value={values.token}
-              onChange={(e) => setValues((prev) => ({ ...prev, token: e.target.value }))}
-              placeholder={values.provider === "github" ? "ghp_... or github_pat_..." : "glpat-..."}
-            />
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {scopeHints[values.provider]}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className={secondaryButtonClass}
-              disabled={!canTest}
-              onClick={handleTest}
-            >
-              {current.status === "testing" ? "Testing..." : "Test connection"}
-            </button>
-            {current.status === "success" && (
-              <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
-            )}
-            {current.status === "error" && (
-              <span className="text-sm text-red-600 dark:text-red-400">{current.message}</span>
-            )}
-          </div>
-
-          {saveError && <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>}
-
-          <Footer skip={skipButton}>
-            {canKeepSources && (
-              <button type="button" className={secondaryButtonClass} onClick={() => setStep(2)}>
-                Keep my existing sources
-              </button>
-            )}
-            <button type="submit" className={primaryButtonClass} disabled={!canContinue}>
-              {saving ? "Saving..." : "Continue"}
-            </button>
-          </Footer>
-        </form>
-      )}
-
-      {step === 2 && (
-        <AgentStep
-          config={config}
-          onChange={update}
-          skip={skipButton}
-          onBack={() => setStep(1)}
-          onContinue={() => setStep(3)}
-        />
-      )}
-
-      {step === 3 && (
-        <div className="flex flex-col gap-4">
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-            <dt className="text-zinc-500 dark:text-zinc-400">Git source</dt>
-            <dd className="text-zinc-900 dark:text-zinc-100">{sourceSummary}</dd>
-            <dt className="text-zinc-500 dark:text-zinc-400">Agent</dt>
-            <dd className="text-zinc-900 dark:text-zinc-100">{agentSummary}</dd>
-          </dl>
-          <Footer skip={skipButton} onBack={() => setStep(2)}>
-            <button type="button" className={primaryButtonClass} onClick={() => navigate("/tasks")}>
-              Go to tasks
-            </button>
-          </Footer>
-        </div>
-      )}
     </div>
   );
 }
@@ -311,14 +309,10 @@ function Footer({
   children: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
       {skip}
-      <div className="flex items-center gap-3">
-        {onBack && (
-          <button type="button" className={secondaryButtonClass} onClick={onBack}>
-            Back
-          </button>
-        )}
+      <div className="flex items-center gap-2">
+        {onBack && <Button onClick={onBack}>Back</Button>}
         {children}
       </div>
     </div>
@@ -353,21 +347,21 @@ function AgentStep({
   return (
     <div className="flex flex-col gap-4">
       <AgentSection config={config} onChange={onChange} />
-      <div className="flex flex-col gap-1 text-sm text-zinc-700 dark:text-zinc-300">
-        {noneDetected && <p>No supported agent CLI was found on your PATH.</p>}
-        <Link
-          to="/settings"
-          onClick={() => localStorage.setItem(ADVANCED_OPEN_KEY, "1")}
-          className="text-zinc-600 underline hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-        >
-          Use custom commands in Settings
-        </Link>
-      </div>
+      {noneDetected && (
+        <Notice tone="warning">No supported agent CLI was found on your PATH.</Notice>
+      )}
+      <Link
+        to="/settings"
+        onClick={() => localStorage.setItem(ADVANCED_OPEN_KEY, "1")}
+        className="w-fit rounded text-sm text-accent-700 underline underline-offset-2 hover:text-accent-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:text-accent-400 dark:hover:text-accent-300"
+      >
+        Use custom commands in Settings
+      </Link>
 
       <Footer skip={skip} onBack={onBack}>
-        <button type="button" className={primaryButtonClass} onClick={onContinue}>
+        <Button variant="primary" onClick={onContinue}>
           Continue
-        </button>
+        </Button>
       </Footer>
     </div>
   );

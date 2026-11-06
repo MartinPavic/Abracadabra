@@ -2,13 +2,9 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import type { AppConfig, InstructionScope } from "../lib/api";
 import { describeError, getInstructions, listRuns, readTextFile, setInstructions } from "../lib/api";
+import { Badge, Button, Card, Notice, Select, Textarea } from "./ui";
 
 const MAX_CHARS = 50_000;
-
-const inputClass =
-  "w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
-const buttonClass =
-  "rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900";
 
 interface Project {
   sourceId: string;
@@ -72,16 +68,16 @@ function InstructionsEditor({ scope, label }: { scope: InstructionScope; label: 
     }
   }
 
-  if (loadError) return <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>;
+  if (loadError) return <Notice tone="danger">{loadError}</Notice>;
   if (saved === null) return <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading...</p>;
 
   const count = Array.from(text).length;
 
   return (
     <div className="flex flex-col gap-2">
-      <textarea
+      <Textarea
         aria-label={label}
-        className={`${inputClass} font-mono`}
+        mono
         rows={12}
         value={text}
         onChange={(e) => {
@@ -89,23 +85,27 @@ function InstructionsEditor({ scope, label }: { scope: InstructionScope; label: 
           setJustSaved(false);
         }}
       />
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="button" disabled={text === saved} onClick={save} className={buttonClass}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="primary" disabled={text === saved} onClick={save}>
           Save
-        </button>
-        <button type="button" onClick={importFile} className={buttonClass}>
+        </Button>
+        <Button size="sm" onClick={importFile}>
           Import file...
-        </button>
+        </Button>
         <span
-          className={`text-xs ${
-            count > MAX_CHARS ? "text-red-600 dark:text-red-400" : "text-zinc-500 dark:text-zinc-400"
+          className={`text-xs tabular-nums ${
+            count > MAX_CHARS ? "font-medium text-red-600 dark:text-red-400" : "text-zinc-500 dark:text-zinc-400"
           }`}
         >
           {count.toLocaleString("en-US")} / {MAX_CHARS.toLocaleString("en-US")}
         </span>
-        {justSaved && <span className="text-sm text-green-600 dark:text-green-400">Saved</span>}
-        {error && <span className="text-sm text-red-600 dark:text-red-400">{error}</span>}
+        {justSaved && (
+          <Badge tone="success" dot>
+            Saved
+          </Badge>
+        )}
       </div>
+      {error && <Notice tone="danger">{error}</Notice>}
     </div>
   );
 }
@@ -145,51 +145,41 @@ export function InstructionsSection({ config }: { config: AppConfig }) {
   }
 
   return (
-    <section className="flex flex-col gap-3">
-      <div>
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          Agent instructions
-        </h2>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Added to the prompts of the worker, plan and reviewer agents for every run (global) or for
-          one project.
-        </p>
-      </div>
+    <Card
+      title="Agent instructions"
+      description="Added to the prompts of the worker, plan and reviewer agents for every run (global) or for one project."
+    >
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-2">
+          <h3 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Global</h3>
+          <InstructionsEditor scope={{ kind: "global" }} label="Global instructions" />
+        </div>
 
-      <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-        <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Global</h3>
-        <InstructionsEditor scope={{ kind: "global" }} label="Global instructions" />
+        <div className="flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+          <h3 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Per project</h3>
+          {projects.length === 0 ? (
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Projects appear here after your first run.
+            </p>
+          ) : (
+            <Select aria-label="Project" value={selected} onChange={(e) => setSelected(e.target.value)}>
+              <option value="">Choose a project...</option>
+              {projects.map((p, i) => (
+                <option key={i} value={String(i)}>
+                  {label(p)}
+                </option>
+              ))}
+            </Select>
+          )}
+          {chosen && (
+            <InstructionsEditor
+              key={`${chosen.sourceId}\0${chosen.project}`}
+              scope={{ kind: "project", sourceId: chosen.sourceId, projectPath: chosen.project }}
+              label="Project instructions"
+            />
+          )}
+        </div>
       </div>
-
-      <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-        <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Per project</h3>
-        {projects.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Projects appear here after your first run.
-          </p>
-        ) : (
-          <select
-            aria-label="Project"
-            className={inputClass}
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-          >
-            <option value="">Choose a project...</option>
-            {projects.map((p, i) => (
-              <option key={i} value={String(i)}>
-                {label(p)}
-              </option>
-            ))}
-          </select>
-        )}
-        {chosen && (
-          <InstructionsEditor
-            key={`${chosen.sourceId}\0${chosen.project}`}
-            scope={{ kind: "project", sourceId: chosen.sourceId, projectPath: chosen.project }}
-            label="Project instructions"
-          />
-        )}
-      </div>
-    </section>
+    </Card>
   );
 }

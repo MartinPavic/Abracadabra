@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { SettingsOverride } from "../lib/api";
 import { AutoTextarea } from "./AutoTextarea";
+import { Button, Field, Notice } from "./ui";
 
 const FIELDS: { key: keyof SettingsOverride; label: string }[] = [
   { key: "baseBranch", label: "Base branch" },
@@ -15,9 +16,6 @@ const FIELDS: { key: keyof SettingsOverride; label: string }[] = [
   { key: "reviewerPromptFile", label: "Reviewer system prompt file" },
   { key: "planPromptFile", label: "Plan system prompt file" },
 ];
-
-const inputClass =
-  "w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 font-mono text-xs text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
 
 /** Normalizes blank fields to null so they fall back to the next level. */
 export function cleanOverride(value: SettingsOverride): SettingsOverride {
@@ -37,6 +35,8 @@ export function OverridesEditor({
   value: SettingsOverride;
   onSave: (next: SettingsOverride) => Promise<void>;
 }) {
+  // Several editors can be on the page at once, so ids must be unique per instance.
+  const idPrefix = useId();
   const [draft, setDraft] = useState<SettingsOverride>(value);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,29 +56,24 @@ export function OverridesEditor({
   }
 
   return (
-    <div className="flex flex-col gap-2 pt-2">
+    <div className="flex flex-col gap-3 pt-3">
       {FIELDS.map(({ key, label }) => (
-        <label key={key} className="block text-xs text-zinc-600 dark:text-zinc-400">
-          {label}
+        <Field key={key} label={label} htmlFor={`${idPrefix}-${key}`}>
           <AutoTextarea
-            className={`${inputClass} mt-1`}
+            id={`${idPrefix}-${key}`}
+            mono
             placeholder="(use default)"
             value={draft[key] ?? ""}
             onChange={(e) => setDraft((prev) => ({ ...prev, [key]: e.target.value }))}
           />
-        </label>
+        </Field>
       ))}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          disabled={!dirty || saving}
-          onClick={handleSave}
-          className="rounded-md border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-        >
+      <div>
+        <Button size="sm" disabled={!dirty || saving} onClick={handleSave}>
           {saving ? "Saving..." : "Save overrides"}
-        </button>
-        {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+        </Button>
       </div>
+      {error && <Notice tone="danger">{error}</Notice>}
     </div>
   );
 }

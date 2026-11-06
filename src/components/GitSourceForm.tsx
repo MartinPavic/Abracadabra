@@ -4,6 +4,7 @@ import {
   type GitProvider,
   testConnection,
 } from "../lib/api";
+import { Badge, Button, Field, Input, Notice, Select } from "./ui";
 
 export interface GitSourceFormValues {
   name: string;
@@ -26,10 +27,6 @@ type TestState =
   | { status: "testing" }
   | { status: "success" }
   | { status: "error"; message: string };
-
-const inputClass =
-  "w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
-const labelClass = "mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400";
 
 export function GitSourceForm({
   onAdd,
@@ -90,108 +87,89 @@ export function GitSourceForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
+      className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/40"
     >
-      <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-        Add git source
-      </h2>
+      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Add git source</h3>
 
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass} htmlFor="source-name">
-            Name
-          </label>
-          <input
+        <Field label="Name" htmlFor="source-name">
+          <Input
             id="source-name"
-            className={inputClass}
             value={values.name}
             onChange={(e) => set("name", e.target.value)}
             placeholder="My GitLab"
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className={labelClass} htmlFor="source-provider">
-            Provider
-          </label>
-          <select
+        <Field label="Provider" htmlFor="source-provider">
+          <Select
             id="source-provider"
-            className={inputClass}
             value={values.provider}
             onChange={(e) => set("provider", e.target.value as GitProvider)}
           >
             <option value="gitlab">GitLab</option>
             <option value="github">GitHub</option>
-          </select>
+          </Select>
+        </Field>
+
+        <div className="col-span-2">
+          <Field label="Base URL" htmlFor="source-base-url">
+            <Input
+              id="source-base-url"
+              value={values.baseUrl}
+              onChange={(e) => set("baseUrl", e.target.value)}
+              placeholder={isGitHub ? "https://github.com" : "https://gitlab.com"}
+            />
+          </Field>
         </div>
 
         <div className="col-span-2">
-          <label className={labelClass} htmlFor="source-base-url">
-            Base URL
-          </label>
-          <input
-            id="source-base-url"
-            className={inputClass}
-            value={values.baseUrl}
-            onChange={(e) => set("baseUrl", e.target.value)}
-            placeholder={isGitHub ? "https://github.com" : "https://gitlab.com"}
-          />
+          <Field label="Access token" htmlFor="source-token">
+            <Input
+              id="source-token"
+              type="password"
+              mono
+              value={values.token}
+              onChange={(e) => set("token", e.target.value)}
+              placeholder={isGitHub ? "ghp_... or github_pat_..." : "glpat-..."}
+            />
+          </Field>
         </div>
 
         <div className="col-span-2">
-          <label className={labelClass} htmlFor="source-token">
-            Access token
-          </label>
-          <input
-            id="source-token"
-            type="password"
-            className={inputClass}
-            value={values.token}
-            onChange={(e) => set("token", e.target.value)}
-            placeholder={isGitHub ? "ghp_... or github_pat_..." : "glpat-..."}
-          />
-        </div>
-
-        <div className="col-span-2">
-          <label className={labelClass} htmlFor="source-project-filter">
-            Project / group filter (optional)
-          </label>
-          <input
-            id="source-project-filter"
-            className={inputClass}
-            value={values.projectFilter}
-            onChange={(e) => set("projectFilter", e.target.value)}
-            placeholder={isGitHub ? "owner/repo" : "group/project"}
-          />
+          <Field label="Project / group filter (optional)" htmlFor="source-project-filter">
+            <Input
+              id="source-project-filter"
+              mono
+              value={values.projectFilter}
+              onChange={(e) => set("projectFilter", e.target.value)}
+              placeholder={isGitHub ? "owner/repo" : "group/project"}
+            />
+          </Field>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
           disabled={!canTest || testState.status === "testing"}
           onClick={handleTestConnection}
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
         >
           {testState.status === "testing" ? "Testing..." : "Test connection"}
-        </button>
+        </Button>
 
-        <button
-          type="submit"
-          disabled={!canSave || saving}
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-        >
+        <Button type="submit" variant="primary" disabled={!canSave || saving}>
           {saving ? "Saving..." : "Save source"}
-        </button>
+        </Button>
 
         {testState.status === "success" && (
-          <span className="text-sm text-green-600 dark:text-green-400">Connected</span>
+          <Badge tone="success" dot>
+            Connected
+          </Badge>
         )}
-        {testState.status === "error" && (
-          <span className="text-sm text-red-600 dark:text-red-400">{testState.message}</span>
-        )}
-        {saveError && <span className="text-sm text-red-600 dark:text-red-400">{saveError}</span>}
       </div>
+
+      {testState.status === "error" && <Notice tone="danger">{testState.message}</Notice>}
+      {saveError && <Notice tone="danger">{saveError}</Notice>}
     </form>
   );
 }

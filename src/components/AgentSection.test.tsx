@@ -127,6 +127,19 @@ describe("AgentSection", () => {
     await screen.findByText("Detected");
   });
 
+  it("an agent tile shows its selected state", async () => {
+    const config = configWith({ workerCmd: claude.worker, preset: "claude" });
+    render(<AgentSection config={config} onChange={vi.fn()} />);
+    const selected = screen.getByRole("button", { name: /Claude Code/ });
+    const other = screen.getByRole("button", { name: /Codex/ });
+    expect(selected.getAttribute("aria-pressed")).toBe("true");
+    expect(other.getAttribute("aria-pressed")).toBe("false");
+    // A check mark, so the selection is not shown by colour alone.
+    expect(selected.querySelector("svg")).not.toBeNull();
+    expect(other.querySelector("svg")).toBeNull();
+    await screen.findByText("Detected");
+  });
+
   it("a custom setup shows the custom card", async () => {
     render(<AgentSection config={handEdited} onChange={vi.fn()} />);
     expect(screen.getByText("Custom")).toBeTruthy();

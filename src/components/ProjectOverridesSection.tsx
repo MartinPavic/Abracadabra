@@ -1,9 +1,7 @@
 import { useState } from "react";
 import type { AppConfig, SettingsOverride } from "../lib/api";
 import { isEmptyOverride, OverridesEditor } from "./OverridesEditor";
-
-const inputClass =
-  "w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+import { Button, Card, Icon, Input } from "./ui";
 
 /** Per-project overrides of templates and agent commands (win over per-source ones). */
 export function ProjectOverridesSection({
@@ -35,53 +33,47 @@ export function ProjectOverridesSection({
   const projects = Array.from(new Set([...Object.keys(overrides), ...pending]));
 
   return (
-    <section className="flex flex-col gap-3">
-      <div>
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          Project overrides
-        </h2>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Use different templates or agent commands for a single project. Blank fields fall back
-          to the git source's overrides, then to the defaults.
-        </p>
-      </div>
+    <Card
+      title="Project overrides"
+      description="Use different templates or agent commands for a single project. Blank fields fall back to the git source's overrides, then to the defaults."
+    >
+      <div className="flex flex-col gap-3">
+        {projects.map((projectPath) => (
+          <details
+            key={projectPath}
+            className="group rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-800"
+            open={pending.includes(projectPath)}
+          >
+            <summary className="flex min-w-0 cursor-pointer list-none items-center gap-1.5 rounded text-sm font-medium text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:text-zinc-100 [&::-webkit-details-marker]:hidden">
+              <Icon
+                name="chevron-right"
+                className="size-3.5 shrink-0 text-zinc-500 transition-transform group-open:rotate-90 motion-reduce:transition-none dark:text-zinc-400"
+              />
+              <span className="truncate font-mono">{projectPath}</span>
+            </summary>
+            <OverridesEditor
+              value={overrides[projectPath] ?? {}}
+              onSave={async (value) => {
+                await save(projectPath, value);
+                if (isEmptyOverride(value)) return;
+                setPending((prev) => prev.filter((p) => p !== projectPath));
+              }}
+            />
+          </details>
+        ))}
 
-      {projects.map((projectPath) => (
-        <details
-          key={projectPath}
-          className="rounded-lg border border-zinc-200 px-4 py-2 dark:border-zinc-800"
-          open={pending.includes(projectPath)}
-        >
-          <summary className="cursor-pointer text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            {projectPath}
-          </summary>
-          <OverridesEditor
-            value={overrides[projectPath] ?? {}}
-            onSave={async (value) => {
-              await save(projectPath, value);
-              if (isEmptyOverride(value)) return;
-              setPending((prev) => prev.filter((p) => p !== projectPath));
-            }}
+        <div className="flex gap-2">
+          <Input
+            mono
+            placeholder="Project path, e.g. group/project"
+            value={project}
+            onChange={(e) => setProject(e.target.value)}
           />
-        </details>
-      ))}
-
-      <div className="flex gap-2">
-        <input
-          className={inputClass}
-          placeholder="Project path, e.g. group/project"
-          value={project}
-          onChange={(e) => setProject(e.target.value)}
-        />
-        <button
-          type="button"
-          disabled={project.trim() === ""}
-          onClick={handleAdd}
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-        >
-          Add
-        </button>
+          <Button className="shrink-0" disabled={project.trim() === ""} onClick={handleAdd}>
+            Add
+          </Button>
+        </div>
       </div>
-    </section>
+    </Card>
   );
 }
