@@ -77,7 +77,7 @@ export function PrLensDiagram({ run, baseUrl }: { run: RunRecord; baseUrl?: stri
                   type="button"
                   aria-pressed={lens === item}
                   onClick={() => setLens(item)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
+                  className={`rounded-lg px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
                     lens === item
                       ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
                       : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
