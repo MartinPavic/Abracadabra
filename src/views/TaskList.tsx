@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ReadyBanner } from "../components/ReadyBanner";
 import { RunStatusPill } from "../components/RunStatus";
+import { Badge, Button, Card, EmptyState, Icon, Input, Notice, Select, type Tone } from "../components/ui";
 import {
   describeError,
   listRuns,
@@ -44,15 +45,11 @@ function loadFilters(sourceId: string): SavedFilters | null {
   return null;
 }
 
-const inputClass =
-  "rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+const statusTone: Record<string, Tone> = { opened: "success", open: "success", closed: "neutral" };
 
-const statusBadgeClass: Record<string, string> = {
-  opened: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  open: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  closed: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
-};
-const defaultStatusBadgeClass = "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
+// No checkbox primitive; the focus outline (rather than a ring) is drawn on native checkboxes too.
+const checkboxClass =
+  "size-4 shrink-0 rounded accent-accent-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500 dark:accent-accent-400";
 
 /** GitLab calls the open state "opened"; show it as "open". */
 const statusLabel = (status: string) => (status === "opened" ? "open" : status);
@@ -249,264 +246,263 @@ export function TaskList() {
 
   if (gitSources.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center text-center text-zinc-500 dark:text-zinc-400">
-        <h1 className="mb-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-          No tasks yet
-        </h1>
-        <p className="max-w-sm text-sm">
-          Add a git source in{" "}
-          <Link to="/settings" className="underline">
-            Settings
-          </Link>{" "}
-          to start pulling in assigned issues.
-        </p>
-      </div>
+      <Card>
+        <EmptyState
+          icon="tasks"
+          title="No tasks yet"
+          description={
+            <>
+              Add a git source in{" "}
+              <Link
+                to="/settings"
+                className="rounded underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+              >
+                Settings
+              </Link>{" "}
+              to start pulling in assigned issues.
+            </>
+          }
+        />
+      </Card>
     );
   }
 
+  const selectedCount = filteredTasks.filter((task) => selected.has(task.id)).length;
+
   return (
-    <div className="flex h-full flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
         {gitSources.length > 1 && (
-          <select
-            className={inputClass}
-            aria-label="Git source"
-            value={sourceId ?? ""}
-            onChange={(e) => setSourceId(e.target.value)}
+          <div className="w-40">
+            <Select
+              aria-label="Git source"
+              value={sourceId ?? ""}
+              onChange={(e) => setSourceId(e.target.value)}
+            >
+              {gitSources.map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+
+        <div className="relative w-56">
+          <Icon
+            name="search"
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+          />
+          <Input
+            className="pl-8"
+            aria-label="Search by title"
+            placeholder="Search by title..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        <div className="w-40">
+          <Select
+            aria-label="Filter by project"
+            value={activeProject}
+            onChange={(e) => setProjectFilter(e.target.value)}
           >
-            {gitSources.map((source) => (
-              <option key={source.id} value={source.id}>
-                {source.name}
+            <option value={ALL}>All projects</option>
+            {projects.map((project) => (
+              <option key={project} value={project}>
+                {project}
               </option>
             ))}
-          </select>
-        )}
+          </Select>
+        </div>
 
-        <input
-          className={`${inputClass} w-56`}
-          aria-label="Search by title"
-          placeholder="Search by title..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="w-36">
+          <Select
+            aria-label="Filter by label"
+            value={activeLabel}
+            onChange={(e) => setLabelFilter(e.target.value)}
+          >
+            <option value={ALL}>All labels</option>
+            {labels.map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </div>
 
-        <select
-          className={inputClass}
-          aria-label="Filter by project"
-          value={activeProject}
-          onChange={(e) => setProjectFilter(e.target.value)}
-        >
-          <option value={ALL}>All projects</option>
-          {projects.map((project) => (
-            <option key={project} value={project}>
-              {project}
-            </option>
-          ))}
-        </select>
+        <div className="w-36">
+          <Select
+            aria-label="Filter by status"
+            value={activeStatus}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value={HIDE_CLOSED}>Hide closed</option>
+            <option value={ALL}>All statuses</option>
+            {statuses.map((status) => (
+              <option key={status} value={status}>
+                {statusLabel(status)}
+              </option>
+            ))}
+          </Select>
+        </div>
 
-        <select
-          className={inputClass}
-          aria-label="Filter by label"
-          value={activeLabel}
-          onChange={(e) => setLabelFilter(e.target.value)}
-        >
-          <option value={ALL}>All labels</option>
-          {labels.map((label) => (
-            <option key={label} value={label}>
-              {label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className={inputClass}
-          aria-label="Filter by status"
-          value={activeStatus}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value={HIDE_CLOSED}>Hide closed</option>
-          <option value={ALL}>All statuses</option>
-          {statuses.map((status) => (
-            <option key={status} value={status}>
-              {statusLabel(status)}
-            </option>
-          ))}
-        </select>
-
-        {fetchedAt && (
-          <span className="ml-auto text-xs text-zinc-500 dark:text-zinc-400">
-            Updated {new Date(fetchedAt).toLocaleTimeString()}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={() => refresh()}
-          disabled={loading}
-          className={`${fetchedAt ? "" : "ml-auto "}rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900`}
-        >
-          {loading ? "Refreshing..." : "Refresh"}
-        </button>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {fetchedAt && (
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              Updated {new Date(fetchedAt).toLocaleTimeString()}
+            </span>
+          )}
+          <Button icon="refresh" loading={loading} onClick={() => refresh()}>
+            {loading ? "Refreshing..." : "Refresh"}
+          </Button>
+          {selectedCount > 0 && (
+            <>
+              <Button variant="ghost" disabled={batchRunning} onClick={() => setSelected(new Set())}>
+                Clear selection
+              </Button>
+              <Button
+                variant="primary"
+                icon="play"
+                loading={batchRunning}
+                disabled={runBlock !== null}
+                title={runBlock ?? undefined}
+                onClick={handleRunSelected}
+              >
+                {batchRunning ? "Starting..." : `Run selected (${selectedCount})`}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <Notice tone="danger">{error}</Notice>}
       <ReadyBanner problems={problems} />
-      {runError && <p className="text-sm text-red-600 dark:text-red-400">{runError}</p>}
+      {runError && <Notice tone="danger">{runError}</Notice>}
       {batchMessage && (
-        <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-          {batchMessage}{" "}
-          <Link to="/tasks?tab=history" className="underline">
-            Open history
-          </Link>
-        </p>
-      )}
-      {filteredTasks.some((task) => selected.has(task.id)) && (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={batchRunning || runBlock !== null}
-            title={runBlock ?? undefined}
-            onClick={handleRunSelected}
-            className="rounded-md border border-zinc-900 bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-          >
-            {batchRunning
-              ? "Starting..."
-              : `Run selected (${filteredTasks.filter((task) => selected.has(task.id)).length})`}
-          </button>
-          <button
-            type="button"
-            disabled={batchRunning}
-            onClick={() => setSelected(new Set())}
-            className="rounded-md px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
-          >
-            Clear selection
-          </button>
-        </div>
+        <Notice tone="info">
+          <p className="whitespace-pre-wrap">
+            {batchMessage}{" "}
+            <Link
+              to="/tasks?tab=history"
+              className="rounded font-medium underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+            >
+              Open history
+            </Link>
+          </p>
+        </Notice>
       )}
 
       {!error && tasks !== null && (
-        <div className="flex-1 overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-              <tr>
-                <th className="w-8 px-4 py-2">
-                  <input
-                    type="checkbox"
-                    aria-label="Select all shown tasks"
-                    checked={
-                      filteredTasks.length > 0 && filteredTasks.every((task) => selected.has(task.id))
-                    }
-                    onChange={(e) =>
-                      setSelected(e.target.checked ? new Set(filteredTasks.map((t) => t.id)) : new Set())
-                    }
-                  />
-                </th>
-                <th className="px-4 py-2 font-medium">Title</th>
-                <th className="px-4 py-2 font-medium">Project</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Labels</th>
-                <th className="px-4 py-2 font-medium">Updated</th>
-                <th className="px-4 py-2 font-medium">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTasks.map((task) => (
-                <tr
-                  key={task.id}
-                  className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
-                >
-                  <td className="w-8 px-4 py-2">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${task.title}`}
-                      checked={selected.has(task.id)}
-                      onChange={(e) =>
-                        setSelected((prev) => {
-                          const next = new Set(prev);
-                          if (e.target.checked) next.add(task.id);
-                          else next.delete(task.id);
-                          return next;
-                        })
-                      }
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openUrl(task.url)}
-                        className="text-left text-zinc-900 hover:underline dark:text-zinc-100"
-                      >
-                        {task.title}
-                      </button>
-                      {latestRunByTask.get(task.id) && (
-                        <Link
-                          to={`/tasks/${latestRunByTask.get(task.id)?.id}`}
-                          title="Open the latest run for this task"
+        <Card padded={false}>
+          {filteredTasks.length === 0 ? (
+            <EmptyState icon="search" title="No tasks match the current filters." />
+          ) : (
+            <>
+              <div className="flex items-center gap-3 border-b border-zinc-200 px-4 py-2 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                <input
+                  type="checkbox"
+                  className={checkboxClass}
+                  aria-label="Select all shown tasks"
+                  checked={filteredTasks.length > 0 && filteredTasks.every((task) => selected.has(task.id))}
+                  onChange={(e) =>
+                    setSelected(e.target.checked ? new Set(filteredTasks.map((t) => t.id)) : new Set())
+                  }
+                />
+                <span>
+                  {filteredTasks.length} task{filteredTasks.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {filteredTasks.map((task) => {
+                  const latestRun = latestRunByTask.get(task.id);
+                  return (
+                    <li key={task.id} className="flex items-center gap-3 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        className={checkboxClass}
+                        aria-label={`Select ${task.title}`}
+                        checked={selected.has(task.id)}
+                        onChange={(e) =>
+                          setSelected((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(task.id);
+                            else next.delete(task.id);
+                            return next;
+                          })
+                        }
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openUrl(task.url)}
+                            title={task.title}
+                            className="min-w-0 truncate rounded text-left font-medium text-zinc-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:text-zinc-100"
+                          >
+                            {task.title}
+                          </button>
+                          {latestRun && (
+                            <Link
+                              to={`/tasks/${latestRun.id}`}
+                              title="Open the latest run for this task"
+                              className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+                            >
+                              <RunStatusPill status={latestRun.status} />
+                            </Link>
+                          )}
+                        </div>
+                        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                          <Badge>
+                            <Icon name="folder" className="size-3 shrink-0" />
+                            <span className="max-w-48 truncate" title={task.project}>
+                              {task.project}
+                            </span>
+                          </Badge>
+                          <Badge tone={statusTone[task.status] ?? "info"}>
+                            <span className="capitalize">{statusLabel(task.status)}</span>
+                          </Badge>
+                          {task.labels.map((label) => (
+                            <Badge key={label}>
+                              <span className="max-w-40 truncate" title={label}>
+                                {label}
+                              </span>
+                            </Badge>
+                          ))}
+                          <span>Updated {new Date(task.updatedAt).toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon="list"
+                          onClick={() => handleRun(task.id, true)}
+                          disabled={startingTask !== null || planBlock !== null}
+                          title={planBlock ?? "Produce a plan only: no changes are committed"}
                         >
-                          <RunStatusPill status={latestRunByTask.get(task.id)?.status ?? "queued"} />
-                        </Link>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">{task.project}</td>
-                  <td className="px-4 py-2">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${statusBadgeClass[task.status] ?? defaultStatusBadgeClass}`}
-                    >
-                      {statusLabel(task.status)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {task.labels.map((label) => (
-                        <span
-                          key={label}
-                          className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                          Plan
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          icon="play"
+                          loading={startingTask === task.id}
+                          onClick={() => handleRun(task.id)}
+                          disabled={startingTask !== null || runBlock !== null}
+                          title={runBlock ?? undefined}
                         >
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2 text-zinc-600 dark:text-zinc-400">
-                    {new Date(task.updatedAt).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleRun(task.id, true)}
-                        disabled={startingTask !== null || planBlock !== null}
-                        title={planBlock ?? "Produce a plan only: no changes are committed"}
-                        className="min-w-20 whitespace-nowrap rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-                      >
-                        Plan
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRun(task.id)}
-                        disabled={startingTask !== null || runBlock !== null}
-                        title={runBlock ?? undefined}
-                        className="min-w-24 whitespace-nowrap rounded-md border border-zinc-900 bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-                      >
-                        {startingTask === task.id ? "Starting..." : "Run"}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredTasks.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-zinc-500 dark:text-zinc-400">
-                    No tasks match the current filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                          {startingTask === task.id ? "Starting..." : "Run"}
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </Card>
       )}
     </div>
   );

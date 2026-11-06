@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { ReadyItem } from "../lib/api";
+import { Notice } from "./ui";
 
 const PLAN_NOTE = "Plan runs need a plan command; set it under Advanced in Settings.";
 
@@ -14,15 +15,17 @@ export function ReadyBanner({ problems }: { problems: ReadyItem[] }) {
   const blocking = problems.some((item) => item.blocks === "run");
 
   return (
-    <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-      {blocking && <p className="font-medium">Before you can run tasks:</p>}
+    <Notice tone="warning" title={blocking ? "Before you can run tasks:" : undefined}>
       <ul className="space-y-0.5">
         {problems.map((item) => (
           <li key={item.id}>
             {item.message}{" "}
             {item.id in settingsHint ? (
               <>
-                <Link to="/settings" className="underline">
+                <Link
+                  to="/settings"
+                  className="rounded font-medium underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500"
+                >
                   Open Settings
                 </Link>{" "}
                 <span className="text-xs opacity-75">({settingsHint[item.id]})</span>
@@ -33,6 +36,6 @@ export function ReadyBanner({ problems }: { problems: ReadyItem[] }) {
           </li>
         ))}
       </ul>
-    </div>
+    </Notice>
   );
 }

@@ -1,11 +1,12 @@
 import { useSearchParams } from "react-router-dom";
 import { OrphanedStashes } from "../components/OrphanedStashes";
 import { RunHistory } from "../components/RunHistory";
+import { PageHeader, TabPanel, Tabs, type TabDef } from "../components/ui";
 import { TaskList } from "./TaskList";
 
 type Tab = "tasks" | "history";
 
-const TABS: { id: Tab; label: string }[] = [
+const TABS: TabDef<Tab>[] = [
   { id: "tasks", label: "Tasks" },
   { id: "history", label: "History" },
 ];
@@ -17,27 +18,17 @@ export function TasksPage() {
   const setTab = (next: Tab) => setParams(next === "tasks" ? {} : { tab: next });
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800">
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium ${
-              tab === id
-                ? "border-zinc-900 text-zinc-900 dark:border-zinc-100 dark:text-zinc-100"
-                : "border-transparent text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+    <div className="flex flex-col">
+      <PageHeader title="Tasks" description="Issues assigned to you, ready to hand to an agent." />
+      <Tabs tabs={TABS} value={tab} onChange={setTab} idPrefix="tasks-page" label="Tasks and history" />
+
+      <div className="mt-4 flex flex-col gap-4">
+        <OrphanedStashes />
+        {/* Only the active view is mounted: each one fetches on mount. */}
+        <TabPanel id={tab} value={tab} idPrefix="tasks-page">
+          {tab === "tasks" ? <TaskList /> : <RunHistory />}
+        </TabPanel>
       </div>
-
-      <OrphanedStashes />
-
-      <div className="min-h-0 flex-1">{tab === "tasks" ? <TaskList /> : <RunHistory />}</div>
     </div>
   );
 }

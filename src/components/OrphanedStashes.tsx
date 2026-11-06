@@ -1,6 +1,7 @@
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import { describeError, listOrphanedStashes, type OrphanedStash, restoreOrphanedStash } from "../lib/api";
+import { Button, Notice } from "./ui";
 
 const DISMISSED_KEY = "dismissedStashes";
 
@@ -57,27 +58,19 @@ export function OrphanedStashes() {
   }
 
   return (
-    <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-      <p className="font-medium">Changes stashed before a run are still waiting</p>
+    <Notice tone="warning" title="Changes stashed before a run are still waiting">
       <ul className="mt-2 flex flex-col gap-2">
         {visible.map((stash) => (
-          <li key={stash.commit} className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-xs">{stash.repoPath}</span>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => restore(stash)}
-              className="rounded-md border border-amber-400 px-3 py-1 text-xs font-medium hover:bg-amber-100 disabled:opacity-50 dark:border-amber-800 dark:hover:bg-amber-900/40"
-            >
+          <li key={stash.commit} className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate font-mono text-xs" title={stash.repoPath}>
+              {stash.repoPath}
+            </span>
+            <Button size="sm" disabled={busy} onClick={() => restore(stash)}>
               Restore
-            </button>
-            <button
-              type="button"
-              onClick={() => dismiss(stash.commit)}
-              className="rounded-md px-3 py-1 text-xs font-medium hover:bg-amber-100 dark:hover:bg-amber-900/40"
-            >
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => dismiss(stash.commit)}>
               Dismiss
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -86,6 +79,6 @@ export function OrphanedStashes() {
         this notice; the stash stays in <code>git stash list</code>.
       </p>
       {error && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{error}</p>}
-    </div>
+    </Notice>
   );
 }
