@@ -171,6 +171,7 @@ export function Setup() {
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-4 py-4">
+      <h1 className="sr-only">Set up Abracadabra</h1>
       <StepProgress step={step} />
       <Card title={stepTitles[step]}>
         {step === 1 && (
@@ -348,7 +349,9 @@ function AgentStep({
     <div className="flex flex-col gap-4">
       <AgentSection config={config} onChange={onChange} />
       {noneDetected && (
-        <Notice tone="warning">No supported agent CLI was found on your PATH.</Notice>
+        <Notice tone="warning" role="status">
+          No supported agent CLI was found on your PATH.
+        </Notice>
       )}
       <Link
         to="/settings"

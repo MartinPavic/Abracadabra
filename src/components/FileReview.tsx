@@ -268,7 +268,7 @@ export function FileReview({ run, onChanged }: { run: RunRecord; onChanged: () =
                   <div
                     role="group"
                     aria-label="Decide on this file"
-                    className="sticky bottom-0 z-10 flex flex-col gap-2 border-t border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900"
+                    className="sticky bottom-0 z-10 flex flex-col gap-2 rounded-br-xl border-t border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900"
                   >
                     <Input
                       type="text"

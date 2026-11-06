@@ -58,7 +58,7 @@ export function OrphanedStashes() {
   }
 
   return (
-    <Notice tone="warning" title="Changes stashed before a run are still waiting">
+    <Notice tone="warning" role="status" title="Changes stashed before a run are still waiting">
       <ul className="mt-2 flex flex-col gap-2">
         {visible.map((stash) => (
           <li key={stash.commit} className="flex items-center gap-2">

@@ -375,6 +375,7 @@ describe("Setup", () => {
     expect(bar().getAttribute("aria-valuemin")).toBe("1");
     expect(bar().getAttribute("aria-valuemax")).toBe("3");
     expect(bar().getAttribute("aria-valuenow")).toBe("1");
+    expect(screen.getByRole("heading", { level: 1, name: "Set up Abracadabra" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Connect a git source" })).toBeTruthy();
 
     await connect();

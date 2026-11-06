@@ -33,7 +33,7 @@ export function BranchConflictPrompt({
   }
 
   return (
-    <Notice tone="warning">
+    <Notice tone="warning" role="status">
       <div className="flex flex-col gap-3">
         <p>
           The branch <code className="break-all font-mono">{branch}</code> already exists. Create a

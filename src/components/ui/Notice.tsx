@@ -28,27 +28,28 @@ const TONES: Record<NoticeTone, { box: string; icon: IconName; iconClass: string
 
 export function Notice({
   tone = "info",
+  role,
   title,
   actions,
   children,
 }: {
   tone?: NoticeTone;
+  role?: "alert" | "status";
   title?: ReactNode;
   actions?: ReactNode;
   children?: ReactNode;
 }) {
   const { box, icon, iconClass } = TONES[tone];
-  const role = tone === "danger" || tone === "warning" ? "alert" : "status";
   return (
     <div
-      role={role}
+      role={role ?? (tone === "danger" || tone === "warning" ? "alert" : "status")}
       className={`flex flex-col gap-3 rounded-lg border px-3 py-2.5 text-sm sm:flex-row sm:items-center ${box}`}
     >
       <div className="flex min-w-0 flex-1 gap-2.5">
         <Icon name={icon} className={`mt-0.5 size-4 shrink-0 ${iconClass}`} />
         <div className="min-w-0">
           {title && <p className="font-semibold">{title}</p>}
-          {children && <div>{children}</div>}
+          {children && <div className="break-words">{children}</div>}
         </div>
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}

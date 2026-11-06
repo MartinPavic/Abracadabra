@@ -73,8 +73,11 @@ describe("FileReview", () => {
     await renderWith(threeFiles);
     fireEvent.keyDown(window, { key: "y" });
     await expectFile("b.ts", 2, 3);
+    // Keys are ignored while the previous save is still in flight.
+    await waitFor(() => expect(button("Yes").disabled).toBe(false));
     fireEvent.keyDown(window, { key: "n" });
     await expectFile("c.ts", 3, 3);
+    await waitFor(() => expect(button("Yes").disabled).toBe(false));
     expect(vi.mocked(setFileDecisions).mock.calls).toEqual([
       ["r1", [{ path: "a.ts", decision: "keep", note: null }]],
       ["r1", [{ path: "b.ts", decision: "remove", note: null }]],

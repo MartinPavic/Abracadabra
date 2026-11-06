@@ -120,7 +120,7 @@ export function AgentCommandsSection({
 
   const fields = (
     <div className="flex flex-col gap-4">
-      <Notice tone="info">
+      <Notice tone="info" role="status">
         Agents and test commands run with this app's full environment (your PATH, SSH agent and
         any tokens set in it) and act on issue text written by whoever can edit the issue. Only
         use issues and agents you trust, and keep secrets out of the environment you launch the

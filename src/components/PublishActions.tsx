@@ -146,7 +146,7 @@ export function PublishActions({ run, onChanged }: { run: RunRecord; onChanged: 
         </div>
         {error && (
           <Notice tone="danger">
-            <span className="whitespace-pre-wrap">{error}</span>
+            <span className="whitespace-pre-wrap break-words">{error}</span>
           </Notice>
         )}
       </div>

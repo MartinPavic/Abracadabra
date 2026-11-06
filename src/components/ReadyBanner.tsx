@@ -15,7 +15,11 @@ export function ReadyBanner({ problems }: { problems: ReadyItem[] }) {
   const blocking = problems.some((item) => item.blocks === "run");
 
   return (
-    <Notice tone="warning" title={blocking ? "Before you can run tasks:" : undefined}>
+    <Notice
+      tone="warning"
+      role="status"
+      title={blocking ? "Before you can run tasks:" : undefined}
+    >
       <ul className="space-y-0.5">
         {problems.map((item) => (
           <li key={item.id}>

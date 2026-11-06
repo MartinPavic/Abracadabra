@@ -92,7 +92,7 @@ export function ReviewSummary({
       />
 
       {grouped.remove.length > 0 && (
-        <Notice tone="warning">
+        <Notice tone="warning" role="status">
           Removed files are deleted from the branch when you finish and can&apos;t be brought back
           from the app.
         </Notice>
