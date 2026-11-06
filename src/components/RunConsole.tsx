@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getRunOutput } from "../lib/api";
+import { Button, Card } from "./ui";
 
 interface RunStatusEvent {
   runId: string;
@@ -104,21 +105,29 @@ export function RunConsole({ runId }: { runId?: string }) {
   if (lines.length === 0) return null;
 
   return (
-    <div className="flex max-h-56 flex-col rounded-lg border border-zinc-200 dark:border-zinc-800">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-1.5 text-xs font-medium uppercase text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        <span>Run console</span>
-        <button type="button" onClick={() => setLines([])} className="normal-case hover:underline">
+    <Card
+      title="Run console"
+      padded={false}
+      actions={
+        <Button variant="ghost" size="sm" onClick={() => setLines([])}>
           Clear
-        </button>
-      </div>
-      <div className="flex-1 overflow-auto bg-zinc-50 p-3 font-mono text-xs dark:bg-zinc-950">
+        </Button>
+      }
+    >
+      <div
+        role="region"
+        aria-label="Run console output"
+        // Focusable so the output can be scrolled from the keyboard.
+        tabIndex={0}
+        className="max-h-72 overflow-auto rounded-b-xl bg-zinc-50 p-3 font-mono text-xs leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-500 dark:bg-zinc-950"
+      >
         {lines.map((line) => (
           <div
             key={line.id}
             className={
               line.isError
-                ? "whitespace-pre-wrap text-red-600 dark:text-red-400"
-                : "whitespace-pre-wrap text-zinc-700 dark:text-zinc-300"
+                ? "whitespace-pre-wrap break-words text-red-600 dark:text-red-400"
+                : "whitespace-pre-wrap break-words text-zinc-700 dark:text-zinc-300"
             }
           >
             {line.text}
@@ -126,6 +135,6 @@ export function RunConsole({ runId }: { runId?: string }) {
         ))}
         <div ref={bottomRef} />
       </div>
-    </div>
+    </Card>
   );
 }

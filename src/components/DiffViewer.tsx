@@ -1,12 +1,25 @@
 import { useEffect, useState } from "react";
 import { describeError, type FileDiff, getLiveDiff, getRedoDiff, getRunDiff } from "../lib/api";
+import { Card, Notice, Spinner } from "./ui";
 
-const statusBadge: Record<string, string> = {
+const statusLetter: Record<string, string> = {
   A: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
   M: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
   D: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 };
-const defaultBadge = "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+
+/** Git's status letter for a file (A, M, D, ...). */
+export function FileStatusLetter({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex min-w-5 shrink-0 justify-center rounded px-1 py-0.5 font-mono text-xs font-semibold ${
+        statusLetter[status] ?? "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
 
 const headerClass = "text-zinc-400 dark:text-zinc-500";
 const hunkClass = "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300";
@@ -90,44 +103,48 @@ export function DiffViewer({
   }, [runId, activeMode]);
 
   const current = files?.find((f) => f.path === selected) ?? null;
+  const title =
+    (activeMode === "live" ? "Changes so far" : activeMode === "redo" ? "Since last redo" : "Changes") +
+    (files ? ` (${files.length} file${files.length === 1 ? "" : "s"})` : "");
 
   return (
-    <section className="rounded-lg border border-zinc-200 dark:border-zinc-800">
-      <div className="flex items-center gap-4 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
-        <h2 className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
-          {activeMode === "live"
-            ? "Changes so far"
-            : activeMode === "redo"
-              ? "Since last redo"
-              : "Changes"}
-          {files ? ` (${files.length} file${files.length === 1 ? "" : "s"})` : ""}
-        </h2>
-        {live && (
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">updates every 5 seconds</span>
-        )}
-        {redone && !live && (
-          <div className="ml-auto flex gap-1 text-xs">
+    <Card
+      padded={false}
+      title={title}
+      description={live ? "updates every 5 seconds" : undefined}
+      actions={
+        redone &&
+        !live && (
+          <div className="inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
             {(["all", "redo"] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
+                aria-pressed={activeMode === tab}
                 onClick={() => setMode(tab)}
-                className={`rounded-md px-2 py-1 font-medium ${
+                className={`rounded-md px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
                   activeMode === tab
-                    ? "bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                    : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                    ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                    : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                 }`}
               >
                 {tab === "all" ? "All changes" : "Since last redo"}
               </button>
             ))}
           </div>
-        )}
-      </div>
-
-      {error && <p className="px-4 py-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        )
+      }
+    >
+      {error && (
+        <div className="p-4">
+          <Notice tone="danger">{error}</Notice>
+        </div>
+      )}
       {!error && files === null && (
-        <p className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">Loading diff...</p>
+        <p className="flex items-center gap-2 px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">
+          <Spinner decorative />
+          Loading diff...
+        </p>
       )}
       {files?.length === 0 && (
         <p className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">No changes.</p>
@@ -135,25 +152,22 @@ export function DiffViewer({
 
       {files && files.length > 0 && (
         <div className="flex max-h-[28rem]">
-          <ul className="w-64 shrink-0 overflow-auto border-r border-zinc-200 dark:border-zinc-800">
+          <ul className="w-56 shrink-0 overflow-auto border-r border-zinc-200 py-1 lg:w-64 dark:border-zinc-800">
             {files.map((file) => (
               <li key={file.path}>
                 <button
                   type="button"
                   onClick={() => setSelected(file.path)}
                   title={file.path}
-                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${
+                  aria-current={file.path === selected || undefined}
+                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-500 ${
                     file.path === selected
-                      ? "bg-zinc-100 dark:bg-zinc-900"
-                      : "hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                      ? "bg-accent-50 font-medium text-accent-900 dark:bg-accent-950/40 dark:text-accent-100"
+                      : "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800/50"
                   }`}
                 >
-                  <span
-                    className={`rounded px-1.5 py-0.5 font-mono font-medium ${statusBadge[file.status] ?? defaultBadge}`}
-                  >
-                    {file.status}
-                  </span>
-                  <span className="truncate text-zinc-800 dark:text-zinc-200">{file.path}</span>
+                  <FileStatusLetter status={file.status} />
+                  <span className="truncate">{file.path}</span>
                 </button>
               </li>
             ))}
@@ -170,6 +184,6 @@ export function DiffViewer({
           </pre>
         </div>
       )}
-    </section>
+    </Card>
   );
 }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { isCancellable, type RunRecord, type RunStatus } from "../lib/api";
 import { StatusBadge } from "./ui/Badge";
+import { Icon } from "./ui/Icon";
+import { Spinner } from "./ui/Spinner";
 
 /** "45s", "3m 12s", "1h 05m". */
 export function formatDuration(ms: number): string {
@@ -94,6 +96,33 @@ function progress(
   return { current: stepIndex(run.status), failed: false, cancelled: false };
 }
 
+type StepState = "done" | "running" | "waiting" | "failed" | "cancelled" | "pending";
+
+const MARKER: Record<StepState, string> = {
+  done: "bg-green-600 text-white dark:bg-green-500 dark:text-zinc-950",
+  running: "border-2 border-accent-500 bg-white text-accent-600 dark:border-accent-400 dark:bg-zinc-900 dark:text-accent-400",
+  waiting: "border-2 border-amber-500 bg-amber-50 dark:border-amber-400 dark:bg-amber-950/40",
+  failed: "bg-red-600 text-white dark:bg-red-500 dark:text-zinc-950",
+  cancelled: "bg-zinc-500 text-white dark:bg-zinc-600 dark:text-zinc-100",
+  pending: "border border-zinc-300 bg-white text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400",
+};
+
+function StepMarker({ state, number }: { state: StepState; number: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${MARKER[state]}`}
+    >
+      {state === "done" && <Icon name="check" className="size-4" />}
+      {state === "running" && <Spinner decorative className="size-4" />}
+      {state === "waiting" && <span className="size-2 rounded-full bg-amber-500 dark:bg-amber-400" />}
+      {state === "failed" && <Icon name="alert" className="size-4" />}
+      {state === "cancelled" && <Icon name="x" className="size-4" />}
+      {state === "pending" && number}
+    </span>
+  );
+}
+
 /** fetch -> worker -> reviewer -> commit -> approval (fetch -> plan for plan-only runs) */
 export function RunStepper({ run }: { run: RunRecord }) {
   const steps = run.planOnly ? PLAN_STEPS : STEPS;
@@ -102,33 +131,59 @@ export function RunStepper({ run }: { run: RunRecord }) {
   const durations = statusDurations(run, now);
 
   return (
-    <ol className="flex items-center gap-2 text-xs">
+    <ol aria-label="Run progress" className="flex min-w-0 items-start text-xs">
       {steps.map((step, index) => {
-        const isDone = index < current;
         const isCurrent = index === current;
-        const dot = isCurrent && failed
-          ? "bg-red-500"
-          : isCurrent && cancelled
-            ? "bg-zinc-400"
-            : isDone
-            ? "bg-green-500"
-            : isCurrent
-              ? "animate-pulse bg-blue-500"
-              : "bg-zinc-300 dark:bg-zinc-700";
-        const text = isCurrent || isDone
-          ? "font-medium text-zinc-900 dark:text-zinc-100"
-          : "text-zinc-500 dark:text-zinc-400";
+        const state: StepState =
+          index < current
+            ? "done"
+            : !isCurrent
+              ? "pending"
+              : failed
+                ? "failed"
+                : cancelled
+                  ? "cancelled"
+                  : step.status === "awaiting_approval"
+                    ? "waiting"
+                    : "running";
+        const stateText = {
+          done: "Done",
+          running: "Running",
+          waiting: "Waiting for you",
+          failed: "Failed",
+          cancelled: "Cancelled",
+          pending: failed || cancelled ? "Not reached" : "Pending",
+        }[state];
+        const duration = durations.get(step.status) ?? 0;
 
         return (
-          <li key={step.status} className="flex items-center gap-2">
-            {index > 0 && <span className="h-px w-6 bg-zinc-300 dark:bg-zinc-700" />}
-            <span className={`h-2 w-2 rounded-full ${dot}`} />
-            <span className={text}>{step.label}</span>
-            {(durations.get(step.status) ?? 0) >= 1000 && (
-              <span className="text-zinc-400 dark:text-zinc-500">
-                {formatDuration(durations.get(step.status) ?? 0)}
-              </span>
+          <li
+            key={step.status}
+            aria-current={isCurrent ? "step" : undefined}
+            className="relative flex min-w-0 flex-1 flex-col items-center gap-1.5 px-1 text-center"
+          >
+            {index > 0 && (
+              // Connector from the previous step's marker to this one.
+              <span
+                aria-hidden="true"
+                className={`absolute top-3.5 right-[calc(50%+1.25rem)] left-[calc(-50%+1.25rem)] h-0.5 rounded-full ${
+                  index <= current ? "bg-green-500 dark:bg-green-600" : "bg-zinc-200 dark:bg-zinc-800"
+                }`}
+              />
             )}
+            <StepMarker state={state} number={index + 1} />
+            <span
+              className={
+                state === "pending"
+                  ? "text-zinc-500 dark:text-zinc-400"
+                  : "font-medium text-zinc-900 dark:text-zinc-100"
+              }
+            >
+              {step.label}
+            </span>
+            <span className="text-zinc-500 dark:text-zinc-400">
+              {duration >= 1000 ? `${stateText} · ${formatDuration(duration)}` : stateText}
+            </span>
           </li>
         );
       })}

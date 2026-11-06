@@ -245,6 +245,25 @@ describe("FileReview", () => {
     ]);
   });
 
+  it("the decision buttons keep their accessible names", async () => {
+    await renderWith(threeFiles);
+    const bar = screen.getByRole("group", { name: "Decide on this file" });
+    for (const name of ["No, redo this", "No, just remove", "Yes", "Skip for later", "Accept all remaining"]) {
+      within(bar).getByRole("button", { name });
+    }
+    within(bar).getByPlaceholderText("What's wrong with this file? (optional)");
+  });
+
+  it("the decision bar is sticky", async () => {
+    await renderWith(threeFiles);
+    const bar = screen.getByRole("group", { name: "Decide on this file" });
+    expect(bar.className).toMatch(/\bsticky\b/);
+    expect(bar.className).toMatch(/\bbottom-0\b/);
+    // Opaque in both themes, so the diff doesn't show through.
+    expect(bar.className).toMatch(/\bbg-white\b/);
+    expect(bar.className).toMatch(/\bdark:bg-zinc-900\b/);
+  });
+
   it("a file with only a notice instead of a patch can still be decided", async () => {
     await renderWith([
       { path: "logo.png", status: "A", patch: "(new binary file)" },

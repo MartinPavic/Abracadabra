@@ -3,9 +3,7 @@ import { describeError, type FileMark, finishFileReview, type RunRecord } from "
 import { groupMarks } from "../lib/fileReview";
 import { DiffViewer } from "./DiffViewer";
 import { RunEscapeActions } from "./RunEscapeActions";
-
-const buttonClass =
-  "rounded-md border px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50";
+import { Button, Icon, Notice, Textarea } from "./ui";
 
 const groups = [
   { key: "keep", title: "Kept" },
@@ -53,12 +51,12 @@ export function ReviewSummary({
   }
 
   return (
-    <div data-testid="review-summary" className="flex flex-1 flex-col gap-4 overflow-auto p-4">
+    <div data-testid="review-summary" className="flex min-w-0 flex-1 flex-col gap-4 overflow-auto p-4">
       {groups.map(
         ({ key, title }) =>
           grouped[key].length > 0 && (
             <div key={key}>
-              <h3 className="mb-1 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 {title} ({grouped[key].length})
               </h3>
               <ul>
@@ -68,7 +66,7 @@ export function ReviewSummary({
                       type="button"
                       disabled={busy}
                       onClick={() => onJump(path)}
-                      className="w-full rounded px-2 py-1 text-left hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                      className="w-full rounded-lg px-2 py-1 text-left hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 disabled:cursor-not-allowed dark:hover:bg-zinc-800/50"
                     >
                       <span className="block truncate font-mono text-xs text-zinc-800 dark:text-zinc-200">
                         {path}
@@ -86,41 +84,43 @@ export function ReviewSummary({
           ),
       )}
 
-      <textarea
+      <Textarea
         value={generalNote}
         onChange={(e) => onGeneralNoteChange(e.target.value)}
         rows={3}
         placeholder="Anything else the agent should change?"
-        className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
       />
 
       {grouped.remove.length > 0 && (
-        <p className="text-sm text-amber-800 dark:text-amber-300">
+        <Notice tone="warning">
           Removed files are deleted from the branch when you finish and can&apos;t be brought back
           from the app.
-        </p>
+        </Notice>
       )}
 
       <div className="flex flex-wrap items-start gap-2">
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          icon={redoes ? "refresh" : "check"}
           disabled={busy || grouped.undecided.length > 0}
           onClick={finish}
-          className={`${buttonClass} border-green-600 bg-green-600 text-white hover:bg-green-700`}
         >
           {redoes ? "Apply and redo" : "Finish review"}
-        </button>
+        </Button>
         <RunEscapeActions runId={run.id} onChanged={onChanged} disabled={busy} />
       </div>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && <Notice tone="danger">{error}</Notice>}
 
       {run.previousCommitSha && (
-        <details className="rounded-lg border border-zinc-200 dark:border-zinc-800">
-          <summary className="cursor-pointer px-4 py-2 text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
+        <details className="group">
+          <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-lg px-1 py-0.5 text-xs font-semibold uppercase tracking-wide text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 dark:text-zinc-400 [&::-webkit-details-marker]:hidden">
+            <Icon name="chevron-right" className="size-3.5 transition-transform group-open:rotate-90 motion-reduce:transition-none" />
             Since last redo
           </summary>
-          <DiffViewer runId={run.id} redone />
+          <div className="mt-2">
+            <DiffViewer runId={run.id} redone />
+          </div>
         </details>
       )}
     </div>

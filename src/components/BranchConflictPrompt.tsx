@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { describeError, retryRunWithBranch } from "../lib/api";
+import { Button, Input, Notice } from "./ui";
 
 /** Offers a new branch name when a run failed because its branch already exists. */
 export function BranchConflictPrompt({
@@ -32,35 +33,29 @@ export function BranchConflictPrompt({
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-      <p className="text-sm text-amber-900 dark:text-amber-200">
-        The branch <code className="font-mono">{branch}</code> already exists. Create a new branch
-        and run again?
-      </p>
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        aria-label="New branch name"
-        className="w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 font-mono text-sm text-zinc-900 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-      />
-      <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={busy || name.trim() === ""}
-          onClick={handleCreate}
-          className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          {busy ? "Starting..." : "Create new branch & run"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setDismissed(true)}
-          className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:underline dark:text-zinc-400"
-        >
-          No, keep it failed
-        </button>
+    <Notice tone="warning">
+      <div className="flex flex-col gap-3">
+        <p>
+          The branch <code className="break-all font-mono">{branch}</code> already exists. Create a
+          new branch and run again?
+        </p>
+        <Input mono value={name} onChange={(e) => setName(e.target.value)} aria-label="New branch name" />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            icon="branch"
+            loading={busy}
+            disabled={name.trim() === ""}
+            onClick={handleCreate}
+          >
+            {busy ? "Starting..." : "Create new branch & run"}
+          </Button>
+          <Button variant="ghost" onClick={() => setDismissed(true)}>
+            No, keep it failed
+          </Button>
+        </div>
+        {error && <p className="font-medium text-red-700 dark:text-red-300">{error}</p>}
       </div>
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-    </section>
+    </Notice>
   );
 }

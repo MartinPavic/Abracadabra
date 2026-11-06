@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "./ui";
 
 /** Copies `text` to the clipboard and briefly says so. */
 export function CopyButton({ text }: { text: string }) {
@@ -15,12 +16,8 @@ export function CopyButton({ text }: { text: string }) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => void copy()}
-      className="ml-auto rounded px-2 py-0.5 text-[10px] font-medium normal-case text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
-    >
+    <Button variant="ghost" size="sm" icon={copied ? "check" : "copy"} onClick={() => void copy()}>
       {copied ? "Copied" : "Copy"}
-    </button>
+    </Button>
   );
 }

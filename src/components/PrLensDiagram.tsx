@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { render } from "@coldtea/pr-lens-renderer";
 import { parseGraphDoc } from "@coldtea/pr-lens-schema";
 import { describeError, generateRunDiagram, type RunRecord } from "../lib/api";
+import { Button, Card, Notice } from "./ui";
 
 type Lens = "architecture" | "data-flow";
 
@@ -59,22 +60,27 @@ export function PrLensDiagram({ run, baseUrl }: { run: RunRecord; baseUrl?: stri
   }, [graph, lens]);
 
   return (
-    <section className="rounded-lg border border-zinc-200 dark:border-zinc-800">
-      <div className="flex flex-wrap items-center gap-3 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
-        <h2 className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">PR Lens</h2>
+    <Card padded={false}>
+      <div
+        className={`flex flex-wrap items-center gap-3 px-4 py-3 ${
+          error || svg ? "border-b border-zinc-200 dark:border-zinc-800" : ""
+        }`}
+      >
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">PR Lens</h2>
         {graph && (
-          <div className="ml-auto flex gap-1 text-xs">
+          <div className="ml-auto inline-flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
             {(["architecture", "data-flow"] as const)
               .filter((item) => graph.lenses.includes(item))
               .map((item) => (
                 <button
                   key={item}
                   type="button"
+                  aria-pressed={lens === item}
                   onClick={() => setLens(item)}
-                  className={`rounded-md px-2 py-1 font-medium ${
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 ${
                     lens === item
-                      ? "bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
-                      : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                      ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                      : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                   }`}
                 >
                   {item === "architecture" ? "Architecture" : "Data flow"}
@@ -82,16 +88,21 @@ export function PrLensDiagram({ run, baseUrl }: { run: RunRecord; baseUrl?: stri
               ))}
           </div>
         )}
-        <button
-          type="button"
-          disabled={busy}
+        <Button
+          size="sm"
+          icon="sparkles"
+          loading={busy}
           onClick={generate}
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          className={graph ? undefined : "ml-auto"}
         >
           {busy ? "Generating..." : graph ? "Regenerate" : "Generate diagram"}
-        </button>
+        </Button>
       </div>
-      {error && <p className="px-4 py-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {error && (
+        <div className="p-4">
+          <Notice tone="danger">{error}</Notice>
+        </div>
+      )}
       {svg && (
         <div className="overflow-auto p-4">
           <img
@@ -101,6 +112,6 @@ export function PrLensDiagram({ run, baseUrl }: { run: RunRecord; baseUrl?: stri
           />
         </div>
       )}
-    </section>
+    </Card>
   );
 }
