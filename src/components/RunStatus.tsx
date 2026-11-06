@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { isCancellable, type RunRecord, type RunStatus } from "../lib/api";
+import { StatusBadge } from "./ui/Badge";
 
 /** "45s", "3m 12s", "1h 05m". */
 export function formatDuration(ms: number): string {
@@ -46,27 +47,8 @@ export function useNow(active: boolean): number {
   return now;
 }
 
-const pillClass: Record<RunStatus, string> = {
-  queued: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  cloning: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-  working: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-  reviewing: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-  committing: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
-  awaiting_approval: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  approved: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  discarded: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
-  handed_off: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300",
-  planned: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300",
-  failed: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-  cancelled: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
-};
-
 export function RunStatusPill({ status }: { status: RunStatus }) {
-  return (
-    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${pillClass[status]}`}>
-      {status.replace(/_/g, " ")}
-    </span>
-  );
+  return <StatusBadge status={status} />;
 }
 
 type Step = { label: string; status: RunStatus };

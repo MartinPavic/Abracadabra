@@ -1,4 +1,4 @@
-export function Spinner({ className = "size-4" }: { className?: string }) {
+export function Spinner({ className = "size-4", decorative = false }: { className?: string; decorative?: boolean }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -7,8 +7,7 @@ export function Spinner({ className = "size-4" }: { className?: string }) {
       stroke="currentColor"
       strokeWidth={2.5}
       strokeLinecap="round"
-      role="status"
-      aria-label="Loading"
+      {...(decorative ? { "aria-hidden": true } : { role: "status", "aria-label": "Loading" })}
       className={`${className} animate-spin motion-reduce:animate-none`}
     >
       <circle cx="12" cy="12" r="9" className="opacity-25" />

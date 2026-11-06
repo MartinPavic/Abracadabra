@@ -30,11 +30,12 @@ describe("Button", () => {
 
   it("a loading Button is disabled and shows the spinner but keeps its label", () => {
     render(<Button loading>Running</Button>);
-    const button = screen.getByRole("button", { name: /Running/ }) as HTMLButtonElement;
+    const button = screen.getByRole("button", { name: "Running" }) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(button.getAttribute("aria-busy")).toBe("true");
     expect(button.textContent).toContain("Running");
-    expect(screen.getByRole("status", { name: "Loading" })).not.toBeNull();
+    expect(button.querySelector("svg[aria-hidden='true']")).not.toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("Button forwards onClick and respects disabled", () => {
