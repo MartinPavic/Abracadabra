@@ -6,3 +6,5 @@ export * from "./Badge";
 export * from "./Notice";
 export * from "./PageHeader";
 export * from "./EmptyState";
+export * from "./Tabs";
+export * from "./Form";
