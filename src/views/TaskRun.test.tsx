@@ -2,7 +2,15 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { listen } from "@tauri-apps/api/event";
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cancelRun, deleteRun, getRun, openInIde, type RunRecord, type RunStatus } from "../lib/api";
+import {
+  cancelRun,
+  deleteRun,
+  getRun,
+  openInIde,
+  returnToOriginalBranch,
+  type RunRecord,
+  type RunStatus,
+} from "../lib/api";
 import { useConfig } from "../lib/useConfig";
 import { TaskRun } from "./TaskRun";
 
@@ -170,7 +178,7 @@ describe("TaskRun tabs", () => {
     await renderRun("working", { planOnly: true });
     expect(selectedTab().id).toBe("run-tab-overview");
     expect(screen.queryByTestId("diff")).toBeNull();
-    expect(within(panel("changes")).getByText("No changes to show yet.")).toBeTruthy();
+    expect(within(panel("changes")).getByText("No changes to show.")).toBeTruthy();
   });
 
   it("the default tab follows a status change until the user picks a tab", async () => {
@@ -235,6 +243,27 @@ describe("TaskRun tabs", () => {
     expect(activity.getByText("Worker")).toBeTruthy();
     expect(activity.getByRole("button", { name: "Delete run", hidden: true })).toBeTruthy();
     expect(within(panel("overview")).queryByRole("button", { name: "Delete run", hidden: true })).toBeNull();
+  });
+
+  it("a long switch-back error is rendered inside the notice body, not in its actions", async () => {
+    const long = `error: ${"checkout failed because local changes would be overwritten ".repeat(4)}`.trim();
+    vi.mocked(returnToOriginalBranch).mockRejectedValue(long);
+    await renderRun("awaiting_approval", { branch: "feat/x", originalRef: "main" } as Partial<RunRecord>);
+    const button = within(panel("overview")).getByRole("button", { name: "Switch back to main", hidden: true });
+    fireEvent.click(button);
+    const message = await within(panel("overview")).findByText(long, {}, { timeout: 2000 });
+    const notice = button.closest("[role='status']") as HTMLElement;
+    expect(notice.contains(message)).toBe(true);
+    expect((button.parentElement as HTMLElement).contains(message)).toBe(false);
+  });
+
+  it("a very long switch-back branch name is truncated in the button, with the full text in the title", async () => {
+    const ref = `release/${"x".repeat(200)}`;
+    await renderRun("awaiting_approval", { branch: "feat/x", originalRef: ref } as Partial<RunRecord>);
+    const button = within(panel("overview")).getByRole("button", { name: `Switch back to ${ref}`, hidden: true });
+    expect(button.className).toContain("truncate");
+    expect(button.className).toContain("max-w-64");
+    expect(button.getAttribute("title")).toBe(`Switch back to ${ref}`);
   });
 
   it("opening another run resets the default tab", async () => {

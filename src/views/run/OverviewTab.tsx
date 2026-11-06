@@ -110,16 +110,22 @@ export function OverviewTab({
           run.status === "handed_off") && (
           <Notice
             actions={
-              <>
-                {switchError && <span className="text-red-600 dark:text-red-400">{switchError}</span>}
-                <Button size="sm" disabled={switching} onClick={() => switchBack(run)}>
+              <Button
+                size="sm"
+                className="max-w-64 truncate"
+                title={`Switch back to ${run.originalRef}`}
+                disabled={switching}
+                onClick={() => switchBack(run)}
+              >
+                <span className="truncate">
                   {switching ? "Switching..." : `Switch back to ${run.originalRef}`}
-                </Button>
-              </>
+                </span>
+              </Button>
             }
           >
             Your project folder is on <code className="break-all font-mono">{run.branch}</code>.
             {run.stashCommit && " Your earlier uncommitted changes are stashed."}
+            {switchError && <p className="mt-1 break-words text-red-600 dark:text-red-400">{switchError}</p>}
           </Notice>
         )}
 

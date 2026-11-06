@@ -13,5 +13,5 @@ export function ChangesTab({ run, reload }: { run: RunRecord; reload: () => Prom
   if (run.status === "awaiting_approval" || run.status === "approved") {
     return <DiffViewer runId={run.id} redone={Boolean(run.previousCommitSha)} />;
   }
-  return <EmptyState icon="file" title="No changes to show yet." />;
+  return <EmptyState icon="file" title="No changes to show." />;
 }

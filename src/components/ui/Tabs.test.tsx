@@ -92,6 +92,12 @@ describe("Tabs", () => {
     expect(document.activeElement).toBe(selected());
   });
 
+  it("arrow keys on the tab list are handled so they do not reach other key listeners", () => {
+    render(<Harness />);
+    const notCancelled = fireEvent.keyDown(screen.getByRole("tab", { name: "Alpha" }), { key: "ArrowRight" });
+    expect(notCancelled).toBe(false);
+  });
+
   it("only the selected tab is in the tab order", () => {
     render(<Harness initial="b" />);
     expect(screen.getByRole("tab", { name: "Beta" }).getAttribute("tabindex")).toBe("0");
