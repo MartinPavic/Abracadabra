@@ -49,6 +49,7 @@ const baseConfig: AppConfig = {
   commentPlan: false,
   keepRunsDays: 0,
   ideCommand: "",
+  notifications: true,
   localRepos: {},
   projectOverrides: {},
   maxParallelRuns: 2,

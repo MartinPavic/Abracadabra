@@ -10,7 +10,7 @@ import {
 import { inferPreset } from "../lib/agentPresets";
 import { AutoTextarea } from "./AutoTextarea";
 import { TestCommandButton } from "./TestCommandButton";
-import { Button, Card, Field, Input, Notice, Select } from "./ui";
+import { Button, Card, checkboxClass, Field, Input, Notice, Select } from "./ui";
 
 /** Command templates for the worker and reviewer CLIs that runs shell out to. */
 export function AgentCommandsSection({
@@ -39,6 +39,7 @@ export function AgentCommandsSection({
   const [gate, setGate] = useState<ReviewerGate>(config.reviewerGate ?? "auto_redo");
   const [ideCommand, setIdeCommand] = useState(config.ideCommand ?? "");
   const [keepDays, setKeepDays] = useState(String(config.keepRunsDays ?? 0));
+  const [notifications, setNotifications] = useState(config.notifications ?? true);
   const [usageRegex, setUsageRegex] = useState(config.agent.usageRegex ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +66,7 @@ export function AgentCommandsSection({
     gate !== (config.reviewerGate ?? "auto_redo") ||
     ideCommand !== (config.ideCommand ?? "") ||
     keepDays !== String(config.keepRunsDays ?? 0) ||
+    notifications !== (config.notifications ?? true) ||
     usageRegex !== (config.agent.usageRegex ?? "") ||
     secret !== "";
 
@@ -87,6 +89,7 @@ export function AgentCommandsSection({
         reviewerGate: gate,
         ideCommand: ideCommand.trim(),
         keepRunsDays: Math.max(0, Math.floor(Number(keepDays)) || 0),
+        notifications,
         agent: {
           workerCmd,
           reviewerCmd,
@@ -331,6 +334,15 @@ export function AgentCommandsSection({
           </div>
         </Field>
       </div>
+      <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+        <input
+          type="checkbox"
+          className={checkboxClass}
+          checked={notifications}
+          onChange={(e) => setNotifications(e.target.checked)}
+        />
+        Notify me when a run is ready for review, planned or failed while the app is in the background
+      </label>
       <Field
         label="Cost or token figure in agent output (regex, optional)"
         htmlFor="usage-regex"

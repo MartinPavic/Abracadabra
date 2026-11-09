@@ -67,4 +67,15 @@ describe("AgentCommandsSection presets", () => {
     await waitFor(() => expect(onChange).toHaveBeenCalledOnce());
     expect((onChange.mock.calls[0][0] as AppConfig).agent.preset).toBe("");
   });
+
+  it("notifications default to on and can be switched off", async () => {
+    const onChange = vi.fn().mockResolvedValue(undefined);
+    render(<AgentCommandsSection config={config} onChange={onChange} />);
+    const box = screen.getByRole("checkbox", { name: /Notify me when a run/ }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    fireEvent.click(screen.getByRole("button", { name: "Save commands" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalledOnce());
+    expect((onChange.mock.calls[0][0] as AppConfig).notifications).toBe(false);
+  });
 });

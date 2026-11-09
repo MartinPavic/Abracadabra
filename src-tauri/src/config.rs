@@ -5,7 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Runtime};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -177,6 +177,8 @@ pub struct AppConfig {
     pub keep_runs_days: u32,
     /// Command that opens a run's project folder in your editor, e.g. `code {path}`.
     pub ide_command: String,
+    /// Desktop notification when a run is ready for review, planned or failed (app not focused).
+    pub notifications: bool,
     /// Project path (e.g. "group/project") -> absolute path of the user's local
     /// checkout; projects without an entry get an app-managed clone instead.
     pub local_repos: HashMap<String, String>,
@@ -203,6 +205,7 @@ impl Default for AppConfig {
             comment_plan: false,
             keep_runs_days: 0,
             ide_command: String::new(),
+            notifications: true,
             local_repos: HashMap::new(),
             project_overrides: HashMap::new(),
             max_parallel_runs: 2,
@@ -244,7 +247,7 @@ impl AppConfig {
     }
 }
 
-fn config_file_path(app: &AppHandle) -> Result<PathBuf, String> {
+fn config_file_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     let dir = app
         .path()
         .app_config_dir()
@@ -253,7 +256,7 @@ fn config_file_path(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 /// Loads the config from disk, falling back to defaults if no file exists yet.
-pub fn load(app: &AppHandle) -> Result<AppConfig, String> {
+pub fn load<R: Runtime>(app: &AppHandle<R>) -> Result<AppConfig, String> {
     let path = config_file_path(app)?;
     if !path.exists() {
         log::debug!("no config file at {}; using defaults", path.display());
@@ -367,6 +370,15 @@ mod tests {
             original.timeouts.connect_timeout_secs,
             restored.timeouts.connect_timeout_secs
         );
+    }
+
+    #[test]
+    fn notifications_are_on_unless_the_config_turns_them_off() {
+        assert!(AppConfig::default().notifications);
+        let old: AppConfig = serde_json::from_str(r#"{"baseBranch":"main"}"#).unwrap();
+        assert!(old.notifications);
+        let off: AppConfig = serde_json::from_str(r#"{"notifications":false}"#).unwrap();
+        assert!(!off.notifications);
     }
 
     #[test]

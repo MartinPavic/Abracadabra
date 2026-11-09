@@ -87,6 +87,9 @@ fn notify_if_unfocused<R: Runtime>(app: &AppHandle<R>, run_id: &str, status: Run
         RunStatus::Failed => ("Run failed", "Open the run to see what went wrong."),
         _ => return,
     };
+    if !crate::config::load(app).map(|c| c.notifications).unwrap_or(true) {
+        return;
+    }
     let focused = app
         .get_webview_window("main")
         .and_then(|window| window.is_focused().ok())

@@ -81,6 +81,8 @@ export interface AppConfig {
   keepRunsDays: number;
   /** Command that opens a run's project folder in your editor, e.g. `code {path}`. */
   ideCommand: string;
+  /** Desktop notification when a run is ready for review, planned or failed (app not focused). */
+  notifications: boolean;
   /** Project path ("group/project") -> absolute local checkout folder. */
   localRepos: Record<string, string>;
   /** Project path -> overrides; these win over the git source's overrides. */
