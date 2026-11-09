@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useTheme } from "../lib/theme";
+import appIcon from "../assets/app-icon.png";
 import { Button, Icon, type IconName } from "./ui";
 
 const navItems: { to: string; label: string; icon: IconName }[] = [
@@ -15,9 +16,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex h-screen w-screen overflow-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <aside className="flex w-56 shrink-0 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex items-center gap-2.5 px-4 py-4">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-600 text-white dark:bg-accent-500">
-            <Icon name="sparkles" className="size-4.5" />
-          </span>
+          <img src={appIcon} alt="" className="size-9 shrink-0" />
           <span className="truncate text-base font-semibold text-zinc-900 dark:text-zinc-100">Abracadabra</span>
         </div>
         <nav className="flex flex-col gap-1 px-2">
