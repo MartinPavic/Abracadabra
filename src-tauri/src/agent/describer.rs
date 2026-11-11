@@ -6,7 +6,7 @@ use std::path::Path;
 use tauri::{AppHandle, Runtime};
 
 use super::runner::{
-    run_agent, tail_chars, write_prompt_file, AgentCommand, AgentRole, AgentRunOutput, AgentRuntime,
+    failure_detail, run_agent, write_prompt_file, AgentCommand, AgentRole, AgentRunOutput, AgentRuntime,
 };
 
 /// Larger diffs are cut so the prompt file stays usable.
@@ -105,7 +105,7 @@ fn into_sections(output: AgentRunOutput) -> Result<GeneratedSections, String> {
         return Err("the description command timed out and was stopped".to_string());
     }
     if !output.success {
-        let stderr = tail_chars(&output.stderr.join("\n"), 2000);
+        let stderr = failure_detail(&output.stderr);
         return Err(if stderr.is_empty() {
             "the description command exited with a non-zero status".to_string()
         } else {

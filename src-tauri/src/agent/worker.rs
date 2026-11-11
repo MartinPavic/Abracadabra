@@ -6,7 +6,7 @@ use std::path::Path;
 use tauri::{AppHandle, Runtime};
 
 use super::runner::{
-    run_agent, tail_chars, write_prompt_file, AgentCommand, AgentRole, AgentRunOutput, AgentRuntime,
+    failure_detail, run_agent, tail_chars, write_prompt_file, AgentCommand, AgentRole, AgentRunOutput, AgentRuntime,
 };
 
 /// How much of the worker's output is kept as its summary (commit message body,
@@ -67,8 +67,7 @@ fn into_summary(output: AgentRunOutput) -> Result<String, String> {
     if output.success {
         return Ok(tail_chars(&output.stdout.join("\n"), MAX_SUMMARY_CHARS));
     }
-    let stderr = output.stderr.join("\n");
-    let stderr = tail_chars(&stderr, 2000);
+    let stderr = failure_detail(&output.stderr);
     Err(if stderr.is_empty() {
         "worker exited with a non-zero status".to_string()
     } else {

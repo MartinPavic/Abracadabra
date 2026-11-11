@@ -6,7 +6,7 @@ use std::path::Path;
 use tauri::{AppHandle, Runtime};
 
 use super::runner::{
-    run_agent, tail_chars, write_prompt_file, AgentCommand, AgentRole, AgentRunOutput, AgentRuntime,
+    failure_detail, run_agent, tail_chars, write_prompt_file, AgentCommand, AgentRole, AgentRunOutput, AgentRuntime,
 };
 use super::tester::TestResult;
 use crate::git::staged_diff;
@@ -100,7 +100,7 @@ fn into_review_notes(output: AgentRunOutput) -> Result<String, String> {
     if output.success {
         return Ok(tail_chars(&output.stdout.join("\n"), MAX_NOTES_CHARS));
     }
-    let stderr = tail_chars(&output.stderr.join("\n"), 2000);
+    let stderr = failure_detail(&output.stderr);
     Err(if stderr.is_empty() {
         "reviewer exited with a non-zero status".to_string()
     } else {

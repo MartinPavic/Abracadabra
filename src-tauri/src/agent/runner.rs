@@ -122,6 +122,19 @@ pub fn tail_chars(text: &str, max: usize) -> String {
     format!("... (output truncated)\n{tail}")
 }
 
+/// Captured stderr for a failed agent, with a fix appended when Claude Code says the
+/// folder is untrusted (non-interactive runs can't show its trust dialog).
+pub fn failure_detail(stderr: &[String]) -> String {
+    let detail = tail_chars(&stderr.join("\n"), 2000);
+    if detail.contains("workspace has not been trusted") {
+        return format!(
+            "{detail}\n\nClaude Code does not trust this project folder yet. Run `claude` once in the folder and \
+             accept the trust dialog (or set hasTrustDialogAccepted for the folder in ~/.claude.json), then run again."
+        );
+    }
+    detail
+}
+
 /// Process groups of running agents (by run), so they can be killed when the
 /// app exits or the user cancels a run, plus the set of runs asked to stop.
 #[derive(Default)]
@@ -597,6 +610,17 @@ mod tests {
         let lines = stream_lines(std::io::Cursor::new(many.into_bytes()), |_| {}).await;
         assert_eq!(lines.len(), MAX_STORED_LINES);
         assert_eq!(lines.last().unwrap(), &format!("line {}", MAX_STORED_LINES + 9));
+    }
+
+    #[test]
+    fn untrusted_folder_errors_get_a_fix_appended() {
+        let lines = vec![
+            "Ignoring 3 permissions.allow entries from .claude/settings.json: this workspace has not been trusted.".to_string(),
+        ];
+        let detail = failure_detail(&lines);
+        assert!(detail.starts_with("Ignoring 3 permissions.allow"));
+        assert!(detail.contains("accept the trust dialog"));
+        assert_eq!(failure_detail(&["boom".to_string()]), "boom");
     }
 
     #[test]
